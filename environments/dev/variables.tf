@@ -102,6 +102,12 @@ variable "jump_public_key" {
   type        = string
 }
 
+variable "jump_private_key_path" {
+  description = "Path to admin's private SSH key for bastion access (used by Terraform provisioner)"
+  type        = string
+  default     = "~/.ssh/id_ed25519"
+}
+
 # =============================================================================
 # Team VM Configuration
 # =============================================================================

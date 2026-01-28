@@ -6,7 +6,8 @@
 2. [Настройка окружения команды](#настройка-окружения-команды)
 3. [Проверка NAT и TPROXY](#проверка-nat-и-tproxy)
 4. [Traefik routing](#traefik-routing)
-5. [Troubleshooting](#troubleshooting)
+5. [Управление конфигурацией Xray (VPN/Proxy)](#управление-конфигурацией-xray-vpnproxy)
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -279,6 +280,271 @@ Traefik настроен в режиме TLS passthrough - SSL-терминац�
 
 ---
 
+## Управление конфигурацией Xray (VPN/Proxy)
+
+### Как работает Xray
+
+Xray запущен на edge VM как systemd сервис и обеспечивает прозрачное проксирование (TPROXY):
+- Перехватывает TCP/UDP трафик из private subnet
+- Маршрутизирует по правилам: AI APIs и соцсети через VLESS proxy, остальное напрямую
+- Конфигурация: `/opt/xray/config.json`
+
+### Изменение конфигурации Xray
+
+#### Вариант 1: Через Terraform (рекомендуется)
+
+Самый удобный способ — редактировать JSON конфиг и применять через Terraform.
+
+**Первый запуск:**
+
+1. После первого `terraform apply` создастся файл `secrets/xray-config.json`
+
+2. Отредактируйте его напрямую (весь JSON целиком):
+   ```bash
+   nano secrets/xray-config.json
+   ```
+
+   Или используйте пример:
+   ```bash
+   cp templates/xray/config.example.json secrets/xray-config.json
+   # Отредактируйте VLESS параметры
+   ```
+
+3. Примените изменения:
+   ```bash
+   cd environments/dev
+   terraform apply
+   ```
+
+   Terraform автоматически:
+   - Загрузит `secrets/xray-config.json` на edge VM
+   - Перезапустит Xray сервис
+
+**Последующие изменения:**
+
+Просто отредактируйте `secrets/xray-config.json` и запустите `terraform apply`.
+
+Можно менять:
+- VLESS параметры (server, uuid, public_key и т.д.)
+- Routing правила (добавлять/удалять домены)
+- DNS настройки
+- Логирование
+
+**Важно:** Убедитесь что `jump_private_key_path` указывает на правильный SSH ключ:
+```hcl
+# В terraform.tfvars (раскомментировать если нужен другой путь)
+jump_private_key_path = "~/.ssh/id_ed25519"
+```
+
+#### Вариант 2: Редактирование напрямую на edge VM
+
+Для быстрых изменений без Terraform:
+
+```bash
+# Подключиться к edge VM
+ssh jump@<edge-ip>
+
+# Отредактировать конфигурацию
+sudo nano /opt/xray/config.json
+
+# Перезапустить Xray
+sudo systemctl restart xray
+
+# Проверить статус
+sudo systemctl status xray
+sudo journalctl -u xray --no-pager -n 20
+```
+
+**Внимание:** Изменения, сделанные напрямую на VM, будут перезаписаны при следующем `terraform apply`.
+
+#### Вариант 3: Через локальный файл и scp
+
+1. После `terraform apply` конфиг сохраняется в `secrets/xray-config.json`
+
+2. Можно отредактировать его и загрузить вручную:
+   ```bash
+   scp secrets/xray-config.json jump@<edge-ip>:/tmp/
+   ssh jump@<edge-ip> "sudo mv /tmp/xray-config.json /opt/xray/config.json && sudo systemctl restart xray"
+   ```
+
+### Изменение routing правил
+
+Routing правила находятся в секции `routing.rules` конфигурации Xray.
+
+#### Добавить домен через proxy
+
+```json
+{
+  "type": "field",
+  "domain": [
+    "geosite:category-ai-!cn",
+    "geosite:youtube",
+    "domain:example.com",
+    "full:api.example.com"
+  ],
+  "outboundTag": "proxy"
+}
+```
+
+#### Добавить домен напрямую (bypass proxy)
+
+```json
+{
+  "type": "field",
+  "domain": ["domain:mysite.ru"],
+  "outboundTag": "direct"
+}
+```
+
+#### Блокировать домен
+
+```json
+{
+  "type": "field",
+  "domain": ["domain:blocked.com"],
+  "outboundTag": "block"
+}
+```
+
+### Доступные geosite категории
+
+- `geosite:category-ai-!cn` - AI сервисы (OpenAI, Anthropic, Google AI и др.)
+- `geosite:youtube` - YouTube
+- `geosite:instagram` - Instagram
+- `geosite:tiktok` - TikTok
+- `geosite:linkedin` - LinkedIn
+- `geosite:telegram` - Telegram
+- `geosite:notion` - Notion
+- `geosite:github` - GitHub
+- `geosite:google` - Google сервисы
+
+### Пример: Добавить GitHub через proxy
+
+Отредактируйте `/opt/xray/config.json` на edge VM:
+
+```json
+{
+  "type": "field",
+  "domain": [
+    "geosite:category-ai-!cn",
+    "geosite:notion",
+    "geosite:youtube",
+    "geosite:instagram",
+    "geosite:tiktok",
+    "geosite:linkedin",
+    "geosite:telegram",
+    "geosite:github"
+  ],
+  "outboundTag": "proxy"
+}
+```
+
+Затем перезапустите Xray:
+```bash
+sudo systemctl restart xray
+```
+
+### Изменение VLESS сервера
+
+Если нужно сменить VLESS сервер:
+
+1. Отредактировать `secrets/xray-config.json`, найти секцию `outbounds` с `"tag": "proxy"`:
+   ```json
+   {
+     "tag": "proxy",
+     "protocol": "vless",
+     "settings": {
+       "vnext": [{
+         "address": "new-server.example.com",
+         "port": 443,
+         "users": [{
+           "id": "your-new-uuid",
+           "flow": "xtls-rprx-vision",
+           "encryption": "none"
+         }]
+       }]
+     },
+     "streamSettings": {
+       "network": "tcp",
+       "security": "reality",
+       "realitySettings": {
+         "fingerprint": "chrome",
+         "serverName": "www.microsoft.com",
+         "publicKey": "new-public-key",
+         "shortId": "new-short-id",
+         "spiderX": ""
+       }
+     }
+   }
+   ```
+
+2. Также обновить IP в routing правилах (секция `routing.rules`), найти правило с комментарием `"_comment": "Exclude VLESS server IP"`:
+   ```json
+   {
+     "type": "field",
+     "ip": ["1.2.3.4"],
+     "outboundTag": "direct"
+   }
+   ```
+
+3. Применить изменения (**без пересоздания edge VM**):
+   ```bash
+   cd environments/dev
+   terraform apply
+   ```
+
+   Terraform автоматически обновит конфиг и перезапустит Xray.
+
+4. **Дополнительно:** если изменился IP VLESS сервера, нужно обновить iptables правило:
+   ```bash
+   ssh jump@<edge-ip>
+   # Удалить старое правило
+   sudo iptables -t mangle -D XRAY -d <old-vless-ip> -j RETURN
+   # Добавить новое
+   sudo iptables -t mangle -I XRAY 5 -d <new-vless-ip> -j RETURN
+   # Сохранить
+   sudo netfilter-persistent save
+   ```
+
+### Отключение TPROXY (только NAT)
+
+Если нужно временно отключить прозрачное проксирование:
+
+```bash
+# На edge VM
+sudo iptables -t mangle -D PREROUTING -s 10.20.0.0/24 -j XRAY
+sudo systemctl stop xray
+```
+
+Трафик будет идти напрямую через NAT (MASQUERADE).
+
+Для включения обратно:
+```bash
+sudo systemctl start xray
+sudo iptables -t mangle -A PREROUTING -s 10.20.0.0/24 -j XRAY
+```
+
+### Диагностика
+
+```bash
+# Проверить статус Xray
+sudo systemctl status xray
+
+# Смотреть логи в реальном времени
+sudo journalctl -u xray -f
+
+# Проверить access log (какой трафик обрабатывается)
+sudo tail -f /var/log/xray/access.log
+
+# Проверить error log
+sudo cat /var/log/xray/error.log
+
+# Проверить конфигурацию (валидность JSON)
+/usr/local/bin/xray run -test -config /opt/xray/config.json
+```
+
+---
+
 ## Troubleshooting
 
 ### VM не имеет доступа в интернет
@@ -317,11 +583,11 @@ Traefik настроен в режиме TLS passthrough - SSL-терминац�
 
 ### TPROXY не работает
 
-1. Проверить Xray контейнер запущен:
+1. Проверить Xray сервис запущен:
    ```bash
    # На edge VM
-   docker ps | grep xray
-   docker logs xray
+   sudo systemctl status xray
+   sudo journalctl -u xray -f
    ```
 
 2. Проверить iptables правила:
@@ -342,6 +608,13 @@ Traefik настроен в режиме TLS passthrough - SSL-терминац�
    ```bash
    # На edge VM
    sudo iptables -t mangle -L XRAY -n -v | grep <vless-server-ip>
+   ```
+
+5. Проверить логи Xray:
+   ```bash
+   # На edge VM
+   cat /var/log/xray/error.log
+   cat /var/log/xray/access.log
    ```
 
 ### Сайт недоступен извне

@@ -52,7 +52,7 @@ write_files:
     content: |
       ${indent(6, xray_config)}
 
-  # Docker Compose for services
+  # Docker Compose for Traefik (Xray runs as native systemd service for TPROXY support)
   - path: /opt/docker-compose.yml
     permissions: '0644'
     content: |
@@ -73,28 +73,18 @@ write_files:
           networks:
             - proxy
       
-        xray:
-          image: teddysun/xray:latest
-          container_name: xray
-          restart: unless-stopped
-          network_mode: host
-          volumes:
-            - /opt/xray/config.json:/etc/xray/config.json:ro
-          cap_add:
-            - NET_ADMIN
-            - NET_RAW
-      
       networks:
         proxy:
           name: proxy
           driver: bridge
 
-  # Sysctl configuration for IP forwarding
+  # Sysctl configuration for IP forwarding and TPROXY
   - path: /etc/sysctl.d/99-ip-forward.conf
     permissions: '0644'
     content: |
       net.ipv4.ip_forward = 1
       net.ipv4.conf.all.forwarding = 1
+      net.ipv4.ip_nonlocal_bind = 1
 
   # SSH server configuration
   - path: /etc/ssh/sshd_config.d/99-jump-host.conf
@@ -106,6 +96,34 @@ write_files:
       X11Forwarding no
       PasswordAuthentication no
       PubkeyAuthentication yes
+
+  # Xray systemd service (native binary for TPROXY IP_TRANSPARENT support)
+  - path: /etc/systemd/system/xray.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Xray Service
+      Documentation=https://github.com/XTLS/Xray-core
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      ExecStart=/usr/local/bin/xray run -config /opt/xray/config.json
+      Restart=on-failure
+      RestartSec=3
+      WorkingDirectory=/usr/local/bin
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # TPROXY ip rules persistence script (runs on network up)
+  - path: /etc/networkd-dispatcher/routable.d/50-tproxy-rules
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      ip rule add fwmark 1 table 100 2>/dev/null || true
+      ip route add local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
 
 # =============================================================================
 # Run Commands
@@ -153,6 +171,22 @@ runcmd:
   # Save iptables rules
   - netfilter-persistent save
 
+  # ==========================================================================
+  # Install Xray (native binary for TPROXY support)
+  # ==========================================================================
+  - wget -qO /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v25.1.30/Xray-linux-64.zip
+  - unzip -o /tmp/xray.zip -d /tmp xray
+  - mv /tmp/xray /usr/local/bin/
+  - chmod +x /usr/local/bin/xray
+  - rm /tmp/xray.zip
+
+  # Download geo files for Xray routing rules
+  - wget -qO /usr/local/bin/geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+  - wget -qO /usr/local/bin/geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+
+  # Create Xray log directory
+  - mkdir -p /var/log/xray
+
   # Enable and start Docker
   - systemctl enable docker
   - systemctl start docker
@@ -161,8 +195,13 @@ runcmd:
   - mkdir -p /opt/traefik/acme
   - mkdir -p /opt/traefik/dynamic
 
-  # Start services with Docker Compose
+  # Start Traefik with Docker Compose
   - cd /opt && docker-compose up -d
+
+  # Start Xray as systemd service
+  - systemctl daemon-reload
+  - systemctl enable xray
+  - systemctl start xray
 
   # Restart SSH to apply new config
   - systemctl restart sshd

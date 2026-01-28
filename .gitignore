@@ -19,8 +19,8 @@ override.tf.json
 *_override.tf.json
 
 # Secrets directory
-./secrets/
-!./secrets/.gitkeep
+secrets/
+!secrets/.gitkeep
 
 # SSH keys
 *.pem

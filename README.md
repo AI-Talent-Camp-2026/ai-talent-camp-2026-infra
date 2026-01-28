@@ -117,7 +117,7 @@ export YC_SERVICE_ACCOUNT_KEY_FILE=/path/to/key.json
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone <repo-url>
+git clone https://gitlab.com/aitalenthub-core/ai-talent-camp-2026-infra.git
 cd ai-talent-camp-2026-infra/environments/dev
 ```
 
@@ -287,7 +287,21 @@ ai-talent-camp-2026-infra/
 | Edge | 2 | 4GB | 20GB SSD | 100% |
 | Team | 4 | 8GB | 65GB SSD | 100% |
 
-### VLESS Proxy переменные
+### VLESS Proxy настройка
+
+**Рекомендуемый способ:** Редактировать `secrets/xray-config.json` напрямую
+
+После первого `terraform apply` создастся файл `secrets/xray-config.json` с полной конфигурацией Xray. Вы можете редактировать его напрямую и применять изменения через `terraform apply` без пересоздания VM.
+
+```bash
+# После первого apply
+nano secrets/xray-config.json  # Отредактируйте VLESS параметры, routing и т.д.
+terraform apply                # Синхронизирует изменения на edge VM
+```
+
+**Альтернативный способ:** Использовать переменные в terraform.tfvars
+
+**Примечание:** Переменные используются только для генерации начального конфига. Если файл `secrets/xray-config.json` существует, он имеет приоритет.
 
 | Переменная | Описание | Обязательно |
 |------------|----------|-------------|

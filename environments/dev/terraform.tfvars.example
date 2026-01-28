@@ -45,6 +45,9 @@ edge_preemptible   = false
 jump_user       = "jump"
 jump_public_key = "ssh-ed25519 AAAA... admin@example.com"
 
+# Path to admin's private key (for Terraform to add team keys to bastion)
+jump_private_key_path = "~/.ssh/id_ed25519"
+
 # =============================================================================
 # Team VM Configuration
 # =============================================================================
@@ -79,8 +82,12 @@ teams = {}
 # =============================================================================
 # Xray/VLESS Configuration (for transparent proxy through AI APIs)
 # =============================================================================
-# Leave vless_server empty to disable VLESS proxy
-# Traffic will be routed through geosite:category-ai-!cn and social networks
+# PREFERRED METHOD: Edit secrets/xray-config.json directly (entire JSON config)
+# After first terraform apply, secrets/xray-config.json will be created.
+# You can edit this file and run terraform apply to sync changes to edge VM.
+#
+# ALTERNATIVE METHOD: Use variables below (will be ignored if secrets/xray-config.json exists)
+# These variables generate initial config from templates/xray/config.json.tpl
 
 # VLESS server settings
 vless_server    = ""                    # e.g., "your-vless-server.example.com"
