@@ -17,8 +17,9 @@ resource "yandex_compute_instance" "edge" {
   zone        = var.zone
 
   resources {
-    cores  = var.cores
-    memory = var.memory
+    cores         = var.cores
+    memory        = var.memory
+    core_fraction = var.core_fraction
   }
 
   boot_disk {
@@ -39,9 +40,11 @@ resource "yandex_compute_instance" "edge" {
     user-data = templatefile("${path.module}/cloud-init.tpl", {
       jump_user           = var.jump_user
       jump_public_key     = var.jump_public_key
+      team_jump_keys      = var.team_jump_keys
       traefik_config      = var.traefik_config
       xray_config         = var.xray_config
       private_subnet_cidr = var.private_subnet_cidr
+      vless_server_ip     = var.vless_server_ip
     })
   }
 

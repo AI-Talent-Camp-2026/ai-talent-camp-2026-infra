@@ -76,7 +76,13 @@ variable "edge_memory" {
 variable "edge_disk_size" {
   description = "Boot disk size in GB for edge VM"
   type        = number
-  default     = 30
+  default     = 20
+}
+
+variable "edge_core_fraction" {
+  description = "Guaranteed vCPU share for edge VM (50, 100)"
+  type        = number
+  default     = 100
 }
 
 variable "edge_preemptible" {
@@ -109,19 +115,25 @@ variable "team_platform" {
 variable "team_cores" {
   description = "Number of CPU cores for team VMs"
   type        = number
-  default     = 2
+  default     = 4
 }
 
 variable "team_memory" {
   description = "Memory in GB for team VMs"
   type        = number
-  default     = 4
+  default     = 8
 }
 
 variable "team_disk_size" {
   description = "Boot disk size in GB for team VMs"
   type        = number
-  default     = 30
+  default     = 65
+}
+
+variable "team_core_fraction" {
+  description = "Guaranteed vCPU share for team VMs (50, 100)"
+  type        = number
+  default     = 100
 }
 
 variable "team_preemptible" {
@@ -131,18 +143,12 @@ variable "team_preemptible" {
 }
 
 variable "teams" {
-  description = "Map of teams with their configuration"
+  description = "Map of teams with their configuration. SSH keys are auto-generated for each team."
   type = map(object({
     user        = string
-    public_keys = list(string)
+    public_keys = list(string)  # Additional keys (optional)
   }))
   default = {}
-}
-
-variable "generate_ssh_keys" {
-  description = "Whether to generate SSH keys for teams"
-  type        = bool
-  default     = false
 }
 
 # =============================================================================
@@ -150,7 +156,13 @@ variable "generate_ssh_keys" {
 # =============================================================================
 
 variable "vless_server" {
-  description = "VLESS proxy server address"
+  description = "VLESS proxy server address (hostname)"
+  type        = string
+  default     = ""
+}
+
+variable "vless_server_ip" {
+  description = "VLESS server IP address (excluded from TPROXY to avoid loop)"
   type        = string
   default     = ""
 }
@@ -168,14 +180,28 @@ variable "vless_uuid" {
   sensitive   = true
 }
 
-variable "proxy_domains" {
-  description = "List of domains to route through VLESS proxy"
-  type        = list(string)
-  default = [
-    "api.openai.com",
-    "api.anthropic.com",
-    "generativelanguage.googleapis.com",
-    "api.groq.com",
-    "api.mistral.ai"
-  ]
+variable "vless_sni" {
+  description = "VLESS Reality SNI (serverName)"
+  type        = string
+  default     = ""
+}
+
+variable "vless_fingerprint" {
+  description = "VLESS Reality browser fingerprint"
+  type        = string
+  default     = "chrome"
+}
+
+variable "vless_public_key" {
+  description = "VLESS Reality public key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "vless_short_id" {
+  description = "VLESS Reality short ID"
+  type        = string
+  default     = ""
+  sensitive   = true
 }

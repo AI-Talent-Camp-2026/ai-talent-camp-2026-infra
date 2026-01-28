@@ -13,7 +13,7 @@
 folder_id = "your-folder-id-here"
 
 # Availability zone
-zone = "ru-central1-a"
+zone = "ru-central1-b"
 
 # =============================================================================
 # Network Configuration
@@ -34,56 +34,62 @@ domain       = "camp.aitalenthub.ru"
 # Edge VM Configuration
 # =============================================================================
 
-edge_platform    = "standard-v3"
-edge_cores       = 2
-edge_memory      = 4
-edge_disk_size   = 30
-edge_preemptible = false
+edge_platform      = "standard-v3"
+edge_cores         = 2
+edge_memory        = 4
+edge_disk_size     = 20
+edge_core_fraction = 100
+edge_preemptible   = false
 
-# SSH public key for jump host access (REQUIRED)
+# SSH public key for admin access to jump host (REQUIRED)
 jump_user       = "jump"
-jump_public_key = "ssh-ed25519 AAAA... your-email@example.com"
+jump_public_key = "ssh-ed25519 AAAA... admin@example.com"
 
 # =============================================================================
 # Team VM Configuration
 # =============================================================================
 
-team_platform    = "standard-v3"
-team_cores       = 2
-team_memory      = 4
-team_disk_size   = 30
-team_preemptible = false
+team_platform      = "standard-v3"
+team_cores         = 4
+team_memory        = 8
+team_disk_size     = 65
+team_core_fraction = 100
+team_preemptible   = false
 
-# Set to true to auto-generate SSH keys for teams
-generate_ssh_keys = false
+# Team definitions - start empty for Phase 1 (NAT only)
+# Add teams incrementally: terraform apply creates only new VMs
+teams = {}
 
-# Team definitions
-teams = {
-  "01" = {
-    user        = "team01"
-    public_keys = ["ssh-ed25519 AAAA... team01@example.com"]
-  }
-  "02" = {
-    user        = "team02"
-    public_keys = ["ssh-ed25519 AAAA... team02@example.com"]
-  }
-  # Add more teams as needed...
-}
+# Phase 2 example (one test team):
+# teams = {
+#   "01" = {
+#     user        = "team01"
+#     public_keys = []  # Will be auto-generated
+#   }
+# }
+
+# Phase 3 example (all teams):
+# teams = {
+#   "01" = { user = "team01", public_keys = [] }
+#   "02" = { user = "team02", public_keys = [] }
+#   "03" = { user = "team03", public_keys = [] }
+#   # Add more teams as needed...
+# }
 
 # =============================================================================
-# Xray/VLESS Configuration (Optional - for AI API proxying)
+# Xray/VLESS Configuration (for transparent proxy through AI APIs)
 # =============================================================================
+# Leave vless_server empty to disable VLESS proxy
+# Traffic will be routed through geosite:category-ai-!cn and social networks
 
-# Leave empty to disable VLESS proxy
-vless_server = ""
-vless_port   = 443
-vless_uuid   = ""
+# VLESS server settings
+vless_server    = ""                    # e.g., "your-vless-server.example.com"
+vless_server_ip = ""                    # IP address (to exclude from TPROXY)
+vless_port      = 443
+vless_uuid      = ""                    # VLESS UUID
 
-# Domains to route through VLESS proxy
-proxy_domains = [
-  "api.openai.com",
-  "api.anthropic.com",
-  "generativelanguage.googleapis.com",
-  "api.groq.com",
-  "api.mistral.ai"
-]
+# Reality settings (required if vless_server is set)
+vless_sni         = ""                  # e.g., "www.microsoft.com"
+vless_fingerprint = "chrome"            # chrome, firefox, safari, etc.
+vless_public_key  = ""                  # Reality public key
+vless_short_id    = ""                  # Reality short ID

@@ -22,19 +22,25 @@ variable "platform" {
 variable "cores" {
   description = "Number of CPU cores"
   type        = number
-  default     = 2
+  default     = 4
 }
 
 variable "memory" {
   description = "Memory in GB"
   type        = number
-  default     = 4
+  default     = 8
 }
 
 variable "disk_size" {
   description = "Boot disk size in GB"
   type        = number
-  default     = 30
+  default     = 65
+}
+
+variable "core_fraction" {
+  description = "Guaranteed vCPU share (50, 100)"
+  type        = number
+  default     = 100
 }
 
 variable "preemptible" {

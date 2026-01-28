@@ -17,8 +17,9 @@ resource "yandex_compute_instance" "team" {
   zone        = var.zone
 
   resources {
-    cores  = var.cores
-    memory = var.memory
+    cores         = var.cores
+    memory        = var.memory
+    core_fraction = var.core_fraction
   }
 
   boot_disk {
@@ -39,8 +40,6 @@ resource "yandex_compute_instance" "team" {
     user-data = templatefile("${path.module}/cloud-init.tpl", {
       team_user   = var.team_user
       public_keys = var.public_keys
-      domain      = var.domain
-      team_id     = var.team_id
     })
   }
 

@@ -6,7 +6,7 @@
   },
   "inbounds": [
     {
-      "tag": "transparent",
+      "tag": "tproxy-in",
       "port": 12345,
       "protocol": "dokodemo-door",
       "settings": {
@@ -15,7 +15,8 @@
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": ["http", "tls"]
+        "destOverride": ["http", "tls"],
+        "routeOnly": false
       },
       "streamSettings": {
         "sockopt": {
@@ -35,13 +36,6 @@
     }
   ],
   "outbounds": [
-    {
-      "tag": "direct",
-      "protocol": "freedom",
-      "settings": {
-        "domainStrategy": "UseIP"
-      }
-    },
 %{ if vless_server != "" ~}
     {
       "tag": "proxy",
@@ -54,8 +48,8 @@
             "users": [
               {
                 "id": "${vless_uuid}",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
+                "flow": "xtls-rprx-vision",
+                "encryption": "none"
               }
             ]
           }
@@ -65,13 +59,19 @@
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "serverName": "${vless_server}",
-          "fingerprint": "chrome",
-          "show": false
+          "fingerprint": "${vless_fingerprint}",
+          "serverName": "${vless_sni}",
+          "publicKey": "${vless_public_key}",
+          "shortId": "${vless_short_id}",
+          "spiderX": ""
         }
       }
     },
 %{ endif ~}
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
     {
       "tag": "block",
       "protocol": "blackhole",
@@ -101,6 +101,7 @@
   },
   "routing": {
     "domainStrategy": "IPIfNonMatch",
+    "domainMatcher": "hybrid",
     "rules": [
       {
         "type": "field",
@@ -112,27 +113,36 @@
         "protocol": ["bittorrent"],
         "outboundTag": "block"
       },
-%{ if vless_server != "" && length(proxy_domains) > 0 ~}
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "direct"
+      },
+%{ if vless_server != "" && vless_server_ip != "" ~}
+      {
+        "type": "field",
+        "ip": ["${vless_server_ip}"],
+        "outboundTag": "direct"
+      },
+%{ endif ~}
+%{ if vless_server != "" ~}
       {
         "type": "field",
         "domain": [
-%{ for idx, domain in proxy_domains ~}
-          "domain:${domain}"${ idx < length(proxy_domains) - 1 ? "," : "" }
-%{ endfor ~}
+          "geosite:category-ai-!cn",
+          "geosite:notion",
+          "geosite:youtube",
+          "geosite:instagram",
+          "geosite:tiktok",
+          "geosite:linkedin",
+          "geosite:telegram"
         ],
         "outboundTag": "proxy"
       },
 %{ endif ~}
       {
         "type": "field",
-        "ip": [
-          "geoip:private"
-        ],
-        "outboundTag": "direct"
-      },
-      {
-        "type": "field",
-        "network": "tcp,udp",
+        "ip": ["0.0.0.0/0", "::/0"],
         "outboundTag": "direct"
       }
     ]

@@ -23,3 +23,9 @@ variable "route_table_id" {
   type        = string
   default     = null
 }
+
+variable "create_private_subnet" {
+  description = "Whether to create private subnet (set to false if creating separately with route table)"
+  type        = bool
+  default     = true
+}

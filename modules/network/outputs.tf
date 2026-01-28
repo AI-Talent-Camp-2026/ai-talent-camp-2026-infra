@@ -9,8 +9,8 @@ output "public_subnet_id" {
 }
 
 output "private_subnet_id" {
-  description = "ID of the private subnet"
-  value       = yandex_vpc_subnet.private.id
+  description = "ID of the private subnet (null if not created)"
+  value       = var.create_private_subnet ? yandex_vpc_subnet.private[0].id : null
 }
 
 output "public_subnet_cidr" {

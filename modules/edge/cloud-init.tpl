@@ -27,6 +27,9 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     ssh_authorized_keys:
       - ${jump_public_key}
+%{ for key in team_jump_keys ~}
+      - ${key}
+%{ endfor ~}
 
 # =============================================================================
 # File Configuration
@@ -79,6 +82,7 @@ write_files:
             - /opt/xray/config.json:/etc/xray/config.json:ro
           cap_add:
             - NET_ADMIN
+            - NET_RAW
       
       networks:
         proxy:
@@ -110,11 +114,42 @@ runcmd:
   # Enable IP forwarding
   - sysctl -p /etc/sysctl.d/99-ip-forward.conf
 
-  # Configure NAT (masquerade) for private subnet
+  # ==========================================================================
+  # NAT Configuration (masquerade for private subnet)
+  # ==========================================================================
   - iptables -t nat -A POSTROUTING -s ${private_subnet_cidr} -o eth0 -j MASQUERADE
   - iptables -A FORWARD -i eth0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
   - iptables -A FORWARD -s ${private_subnet_cidr} -o eth0 -j ACCEPT
+
+  # ==========================================================================
+  # TPROXY Configuration for transparent proxy through Xray
+  # ==========================================================================
   
+  # Policy routing for TPROXY - route marked packets to loopback
+  - ip rule add fwmark 1 table 100
+  - ip route add local 0.0.0.0/0 dev lo table 100
+
+  # Create XRAY chain in mangle table
+  - iptables -t mangle -N XRAY
+
+  # Exclude private networks from TPROXY (don't proxy local traffic)
+  - iptables -t mangle -A XRAY -d 10.0.0.0/8 -j RETURN
+  - iptables -t mangle -A XRAY -d 172.16.0.0/12 -j RETURN
+  - iptables -t mangle -A XRAY -d 192.168.0.0/16 -j RETURN
+  - iptables -t mangle -A XRAY -d 127.0.0.0/8 -j RETURN
+
+  # Exclude VLESS server IP to avoid routing loop
+%{ if vless_server_ip != "" ~}
+  - iptables -t mangle -A XRAY -d ${vless_server_ip} -j RETURN
+%{ endif ~}
+
+  # TPROXY rules - redirect TCP and UDP to Xray on port 12345
+  - iptables -t mangle -A XRAY -p tcp -j TPROXY --on-port 12345 --tproxy-mark 1
+  - iptables -t mangle -A XRAY -p udp -j TPROXY --on-port 12345 --tproxy-mark 1
+
+  # Apply XRAY chain to traffic from private subnet
+  - iptables -t mangle -A PREROUTING -s ${private_subnet_cidr} -j XRAY
+
   # Save iptables rules
   - netfilter-persistent save
 

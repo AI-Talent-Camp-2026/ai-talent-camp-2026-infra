@@ -20,10 +20,12 @@ resource "yandex_vpc_subnet" "public" {
 }
 
 # =============================================================================
-# Private Subnet (for Team VMs)
+# Private Subnet (for Team VMs) - Optional
 # =============================================================================
 
 resource "yandex_vpc_subnet" "private" {
+  count = var.create_private_subnet ? 1 : 0
+
   name           = "${var.network_name}-private"
   description    = "Private subnet for team VMs"
   zone           = var.zone

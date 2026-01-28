@@ -8,9 +8,9 @@ Terraform-инфраструктура для AI-Camp хакатона в Yandex
 
 - **Edge/NAT сервером** - единственная точка входа с публичным IP
 - **Traefik** - reverse proxy с TLS passthrough
-- **Xray/VLESS** - прозрачное проксирование AI API (OpenAI, Anthropic и др.)
+- **Xray/VLESS** - прозрачное проксирование AI API через TPROXY (OpenAI, Anthropic и др.)
 - **Private Network** - изолированная сеть для команд
-- **Team VMs** - отдельные VM для каждой команды
+- **Team VMs** - отдельные VM для каждой команды (4 vCPU, 8GB RAM, 65GB SSD)
 
 ## Архитектура
 
@@ -32,17 +32,19 @@ Terraform-инфраструктура для AI-Camp хакатона в Yandex
 │  │  │            Edge/NAT VM                   │  │  │
 │  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │  │  │
 │  │  │  │ Traefik │  │  Xray   │  │   NAT   │  │  │  │
+│  │  │  │         │  │ TPROXY  │  │         │  │  │  │
 │  │  │  └─────────┘  └─────────┘  └─────────┘  │  │  │
 │  │  └──────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────┘  │
 │                          │                           │
-│                          │ NAT + Routing             │
+│                          │ NAT + TPROXY              │
 │                          ▼                           │
 │  ┌────────────────────────────────────────────────┐  │
 │  │             Private Subnet (10.0.2.0/24)       │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐     │  │
 │  │  │ Team01   │  │ Team02   │  │ Team...  │     │  │
 │  │  │   VM     │  │   VM     │  │   VM     │     │  │
+│  │  │(4vCPU/8G)│  │(4vCPU/8G)│  │(4vCPU/8G)│     │  │
 │  │  └──────────┘  └──────────┘  └──────────┘     │  │
 │  └────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
@@ -116,7 +118,7 @@ export YC_SERVICE_ACCOUNT_KEY_FILE=/path/to/key.json
 
 ```bash
 git clone <repo-url>
-cd iac/environments/dev
+cd ai-talent-camp-2026-infra/environments/dev
 ```
 
 ### 2. Настроить переменные
@@ -129,17 +131,30 @@ cp terraform.tfvars.example terraform.tfvars
 
 ```hcl
 folder_id       = "your-folder-id"
-jump_public_key = "ssh-ed25519 AAAA... your-email@example.com"
+jump_public_key = "ssh-ed25519 AAAA... admin@example.com"
 
-teams = {
-  "01" = {
-    user        = "team01"
-    public_keys = ["ssh-ed25519 AAAA... team01@example.com"]
-  }
-}
+# VLESS proxy (опционально)
+vless_server     = "your-vless-server.example.com"
+vless_server_ip  = "1.2.3.4"
+vless_port       = 443
+vless_uuid       = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+vless_sni        = "www.microsoft.com"
+vless_fingerprint = "chrome"
+vless_public_key = "your-reality-public-key"
+vless_short_id   = "your-short-id"
+
+# Начальное развертывание - только NAT (без команд)
+teams = {}
 ```
 
-### 3. Инициализация и применение
+### 3. Поэтапное развертывание
+
+#### Phase 1: Только NAT и Edge VM
+
+```hcl
+# terraform.tfvars
+teams = {}
+```
 
 ```bash
 terraform init
@@ -147,7 +162,69 @@ terraform plan
 terraform apply
 ```
 
-### 4. Получить outputs
+Проверьте:
+- Edge VM создана и имеет публичный IP
+- NAT работает (можно проверить позже с тестовой VM)
+
+#### Phase 2: Тестовая команда
+
+```hcl
+# terraform.tfvars
+teams = {
+  "01" = {
+    user        = "team01"
+    public_keys = []  # Ключи генерируются автоматически
+  }
+}
+```
+
+```bash
+terraform apply
+```
+
+После применения Terraform создаст:
+- VM для команды
+- Полный набор ключей в `secrets/team-01/`
+
+#### Phase 3: Остальные команды
+
+Добавляйте команды по мере регистрации:
+
+```hcl
+teams = {
+  "01" = { user = "team01", public_keys = [] }
+  "02" = { user = "team02", public_keys = [] }
+  "03" = { user = "team03", public_keys = [] }
+  # ...
+}
+```
+
+```bash
+terraform apply  # Создаст только новые VM
+```
+
+### 4. Получить credentials для команд
+
+После `terraform apply` для каждой команды создаётся папка в `secrets/`:
+
+```
+secrets/
+├── team-01/
+│   ├── team01-jump-key          # Ключ для bastion
+│   ├── team01-jump-key.pub
+│   ├── team01-key               # Ключ для VM
+│   ├── team01-key.pub
+│   ├── team01-deploy-key        # Для GitHub CI/CD
+│   ├── team01-deploy-key.pub
+│   └── ssh-config               # Готовый SSH конфиг
+├── team-02/
+│   └── ...
+└── teams-credentials.json       # Сводка всех команд
+```
+
+Отправьте папку `secrets/team-XX/` команде.
+
+### 5. Получить outputs
 
 ```bash
 # Все outputs
@@ -156,14 +233,17 @@ terraform output
 # Публичный IP edge
 terraform output edge_public_ip
 
-# SSH команды для подключения
+# SSH команды
 terraform output team_ssh_commands
+
+# Расположение credentials
+terraform output team_credentials_folders
 ```
 
 ## Структура проекта
 
 ```
-iac/
+ai-talent-camp-2026-infra/
 ├── modules/
 │   ├── network/          # VPC и подсети
 │   ├── security/         # Security groups
@@ -171,16 +251,20 @@ iac/
 │   ├── edge/             # Edge/NAT VM с Traefik + Xray
 │   └── team_vm/          # VM для команд
 ├── templates/
-│   ├── cloud-init/       # Шаблоны инициализации VM
 │   ├── traefik/          # Конфигурация Traefik
 │   └── xray/             # Конфигурация Xray
 ├── environments/
 │   └── dev/              # Development environment
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── terraform.tfvars.example
 ├── secrets/              # Сгенерированные ключи (gitignored)
+│   ├── team-01/
+│   ├── team-02/
+│   └── teams-credentials.json
 ├── docs/                 # Документация
-├── provider.tf
-├── variables.tf
-└── outputs.tf
+└── README.md
 ```
 
 ## Конфигурация
@@ -196,6 +280,26 @@ iac/
 | `private_cidr` | CIDR приватной подсети | 10.0.2.0/24 |
 | `domain` | Базовый домен | camp.aitalenthub.ru |
 
+### Ресурсы VM
+
+| VM | vCPU | RAM | Disk | core_fraction |
+|----|------|-----|------|---------------|
+| Edge | 2 | 4GB | 20GB SSD | 100% |
+| Team | 4 | 8GB | 65GB SSD | 100% |
+
+### VLESS Proxy переменные
+
+| Переменная | Описание | Обязательно |
+|------------|----------|-------------|
+| `vless_server` | VLESS server hostname | Да (если используется) |
+| `vless_server_ip` | VLESS server IP (для исключения из TPROXY) | Да |
+| `vless_port` | VLESS port | 443 |
+| `vless_uuid` | VLESS UUID | Да |
+| `vless_sni` | Reality SNI | Да |
+| `vless_fingerprint` | Browser fingerprint | chrome |
+| `vless_public_key` | Reality public key | Да |
+| `vless_short_id` | Reality short ID | Да |
+
 ### Добавление новой команды
 
 В `terraform.tfvars`:
@@ -204,16 +308,16 @@ iac/
 teams = {
   "01" = {
     user        = "team01"
-    public_keys = ["ssh-ed25519 AAAA..."]
+    public_keys = []  # Автоматически генерируются jump, vm, github ключи
   }
   "02" = {
     user        = "team02"
-    public_keys = ["ssh-ed25519 AAAA..."]
+    public_keys = []  # Можно добавить дополнительные ключи
   }
   # Добавить новую команду:
   "03" = {
     user        = "team03"
-    public_keys = ["ssh-ed25519 AAAA..."]
+    public_keys = []
   }
 }
 ```
@@ -224,19 +328,26 @@ teams = {
 terraform apply
 ```
 
-### Автоматическая генерация SSH ключей
-
-```hcl
-generate_ssh_keys = true
-```
-
-Ключи будут сохранены в `secrets/`:
-- `team-01-key` - private key
-- `team-01-key.pub` - public key
+Terraform создаст только новые VM, не трогая существующие.
 
 ## Подключение к инфраструктуре
 
-### SSH через jump-host
+### Для команд (используя сгенерированные ключи)
+
+Команда получает папку `secrets/team-XX/` и выполняет:
+
+```bash
+# 1. Скопировать папку
+cp -r secrets/team-01 ~/.ssh/ai-camp
+chmod 600 ~/.ssh/ai-camp/*-key
+
+# 2. Подключиться к VM
+ssh -F ~/.ssh/ai-camp/ssh-config team01
+```
+
+SSH config уже настроен с правильными ключами и ProxyJump.
+
+### Для админа (через jump-host)
 
 ```bash
 # Формат
@@ -246,12 +357,15 @@ ssh -J jump@<edge-public-ip> <team-user>@<team-private-ip>
 ssh -J jump@bastion.camp.aitalenthub.ru team01@10.0.2.10
 ```
 
-### Проверка NAT
+### Проверка NAT и TPROXY
 
 ```bash
-# На team VM
+# На team VM - проверить внешний IP (должен быть IP edge VM)
 curl ifconfig.co
-# Должен показать публичный IP edge VM
+
+# Проверить, что AI API идут через proxy
+curl -v https://api.openai.com/v1/models
+# Должен пройти через VLESS proxy (если настроен)
 ```
 
 ## DNS конфигурация
@@ -263,10 +377,20 @@ curl ifconfig.co
 bastion.camp.aitalenthub.ru    A    <edge-public-ip>
 ```
 
+## Прозрачное проксирование (TPROXY)
+
+Весь трафик из private subnet автоматически перехватывается через TPROXY и маршрутизируется через Xray:
+
+- **AI APIs** (geosite:category-ai-!cn) → VLESS proxy
+- **Соцсети** (YouTube, Instagram, TikTok, LinkedIn, Telegram, Notion) → VLESS proxy
+- **Остальной трафик** → direct
+
+Команды не настраивают ничего - всё работает прозрачно.
+
 ## Удаление инфраструктуры
 
 ```bash
-cd iac/environments/dev
+cd environments/dev
 terraform destroy
 ```
 
@@ -295,12 +419,35 @@ export YC_TOKEN=$(yc iam create-token)
    # На edge VM
    sudo iptables -t nat -L -n -v
    ```
+3. Проверить TPROXY:
+   ```bash
+   # На edge VM
+   sudo iptables -t mangle -L XRAY -n -v
+   ```
 
 ### SSH connection refused
 
 1. Проверить security groups
-2. Проверить SSH ключи
+2. Проверить SSH ключи в `secrets/team-XX/`
 3. Проверить AllowTcpForwarding на edge
+
+### TPROXY не работает
+
+1. Проверить Xray контейнер запущен:
+   ```bash
+   # На edge VM
+   docker ps | grep xray
+   docker logs xray
+   ```
+2. Проверить iptables правила:
+   ```bash
+   sudo iptables -t mangle -L PREROUTING -n -v
+   ```
+3. Проверить policy routing:
+   ```bash
+   ip rule show
+   ip route show table 100
+   ```
 
 ### Подробнее см. [docs/usage.md](docs/usage.md)
 

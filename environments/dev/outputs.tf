@@ -32,7 +32,7 @@ output "edge_private_ip" {
 }
 
 output "bastion_ssh_command" {
-  description = "SSH command to connect to bastion"
+  description = "SSH command to connect to bastion (admin)"
   value       = "ssh ${var.jump_user}@${module.edge.edge_public_ip}"
 }
 
@@ -46,10 +46,10 @@ output "team_vms" {
 }
 
 output "team_ssh_commands" {
-  description = "SSH commands to connect to team VMs via jump host"
+  description = "SSH commands to connect to team VMs (using generated keys)"
   value = {
     for team_id, team_config in var.teams :
-    team_id => "ssh -J ${var.jump_user}@${module.edge.edge_public_ip} ${team_config.user}@${module.team_vm[team_id].private_ip}"
+    team_id => "ssh -F ~/.ssh/ai-camp/ssh-config ${team_config.user}"
   }
 }
 
@@ -66,11 +66,18 @@ output "dns_records" {
 }
 
 # =============================================================================
-# Generated SSH Keys (if enabled)
+# Team Credentials Location
 # =============================================================================
 
-output "generated_public_keys" {
-  description = "Generated public keys for teams (if generate_ssh_keys is enabled)"
-  value       = var.generate_ssh_keys ? { for team_id, key in tls_private_key.team_keys : team_id => key.public_key_openssh } : {}
-  sensitive   = false
+output "team_credentials_folders" {
+  description = "Location of generated credentials for each team"
+  value = {
+    for team_id, team_config in var.teams :
+    team_id => "secrets/team-${team_id}/"
+  }
+}
+
+output "credentials_summary" {
+  description = "Path to JSON file with all team credentials"
+  value       = length(var.teams) > 0 ? "secrets/teams-credentials.json" : null
 }

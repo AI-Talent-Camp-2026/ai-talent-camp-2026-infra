@@ -29,7 +29,13 @@ variable "memory" {
 variable "disk_size" {
   description = "Boot disk size in GB"
   type        = number
-  default     = 30
+  default     = 20
+}
+
+variable "core_fraction" {
+  description = "Guaranteed vCPU share (50, 100)"
+  type        = number
+  default     = 100
 }
 
 variable "preemptible" {
@@ -60,8 +66,20 @@ variable "jump_user" {
 }
 
 variable "jump_public_key" {
-  description = "SSH public key for jump host user"
+  description = "SSH public key for jump host user (admin)"
   type        = string
+}
+
+variable "team_jump_keys" {
+  description = "List of SSH public keys for team access to jump host"
+  type        = list(string)
+  default     = []
+}
+
+variable "vless_server_ip" {
+  description = "VLESS server IP address (excluded from TPROXY to avoid loop)"
+  type        = string
+  default     = ""
 }
 
 variable "traefik_config" {
