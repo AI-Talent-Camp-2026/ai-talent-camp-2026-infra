@@ -1,0 +1,89 @@
+# =============================================================================
+# AI Camp Infrastructure - Example Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git!
+# =============================================================================
+
+# =============================================================================
+# Yandex Cloud Configuration (REQUIRED)
+# =============================================================================
+
+# Your Yandex Cloud folder ID
+folder_id = "your-folder-id-here"
+
+# Availability zone
+zone = "ru-central1-a"
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+
+network_name = "ai-camp-network"
+public_cidr  = "10.0.1.0/24"
+private_cidr = "10.0.2.0/24"
+
+# =============================================================================
+# Project Configuration
+# =============================================================================
+
+project_name = "ai-camp"
+domain       = "camp.aitalenthub.ru"
+
+# =============================================================================
+# Edge VM Configuration
+# =============================================================================
+
+edge_platform    = "standard-v3"
+edge_cores       = 2
+edge_memory      = 4
+edge_disk_size   = 30
+edge_preemptible = false
+
+# SSH public key for jump host access (REQUIRED)
+jump_user       = "jump"
+jump_public_key = "ssh-ed25519 AAAA... your-email@example.com"
+
+# =============================================================================
+# Team VM Configuration
+# =============================================================================
+
+team_platform    = "standard-v3"
+team_cores       = 2
+team_memory      = 4
+team_disk_size   = 30
+team_preemptible = false
+
+# Set to true to auto-generate SSH keys for teams
+generate_ssh_keys = false
+
+# Team definitions
+teams = {
+  "01" = {
+    user        = "team01"
+    public_keys = ["ssh-ed25519 AAAA... team01@example.com"]
+  }
+  "02" = {
+    user        = "team02"
+    public_keys = ["ssh-ed25519 AAAA... team02@example.com"]
+  }
+  # Add more teams as needed...
+}
+
+# =============================================================================
+# Xray/VLESS Configuration (Optional - for AI API proxying)
+# =============================================================================
+
+# Leave empty to disable VLESS proxy
+vless_server = ""
+vless_port   = 443
+vless_uuid   = ""
+
+# Domains to route through VLESS proxy
+proxy_domains = [
+  "api.openai.com",
+  "api.anthropic.com",
+  "generativelanguage.googleapis.com",
+  "api.groq.com",
+  "api.mistral.ai"
+]
