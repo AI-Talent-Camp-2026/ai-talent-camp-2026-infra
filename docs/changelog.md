@@ -16,7 +16,19 @@ Changelog следует принципам [Keep a Changelog](https://keepachan
 
 ---
 
-## [Unreleased]
+## [2.1.0] - 2026-01-29
+
+### Changed
+- **Убран автоматический редирект HTTP→HTTPS на уровне Traefik**
+  - HTTP порт 80 теперь корректно проксируется на Team VM:80
+  - Позволяет Team VM самостоятельно управлять редиректами и HTTP-01 ACME challenge
+  - Редирект можно настроить на уровне Nginx на Team VM через Certbot
+
+### Added
+- **Поддержка кастомных доменов через CNAME**
+  - Команды могут запрашивать добавление своих доменов
+  - Инструкции для администратора по добавлению доменов в Traefik
+  - Документация в user-guide.md и admin-guide.md
 
 ### Planned
 - Admin dashboard для мониторинга
@@ -37,7 +49,7 @@ Changelog следует принципам [Keep a Changelog](https://keepachan
   - Создан модуль `team-credentials` для управления SSH ключами
   - Создан модуль `config-sync` для синхронизации конфигураций
   - Упрощена структура `environments/dev/main.tf` (559 → 218 строк)
-  - [Подробнее](refactoring.md)
+  - [Подробнее](archive/refactoring-2026-01.md)
 
 - **Улучшена гибкость конфигурации Xray**
   - Поддержка любого протокола (Shadowsocks, VLESS, VMess, Trojan)

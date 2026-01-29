@@ -1,6 +1,18 @@
 # =============================================================================
 # Traefik Dynamic Configuration Template
-# AI Camp Infrastructure - Team Routing
+# AI Talent Camp Infrastructure - Team Routing
+# =============================================================================
+#
+# How to add custom domains:
+# 1. User creates issue requesting custom domain
+# 2. Admin adds domain to the team's router rule below
+# 3. User configures DNS (CNAME or A record)
+# 4. User updates Nginx on their VM to handle the domain
+# 5. User obtains SSL certificate for the domain
+#
+# Example for custom domain:
+#   Change: rule: "HostSNI(`team01.camp.aitalenthub.com`)"
+#   To:     rule: "HostSNI(`team01.camp.aitalenthub.com`) || HostSNI(`app.mydomain.com`)"
 # =============================================================================
 
 # TCP Routers for TLS Passthrough
@@ -15,6 +27,18 @@ tcp:
       tls:
         passthrough: true
 %{ endfor ~}
+    
+    # Wildcard router for unmatched HTTPS (optional custom domains)
+    # Note: Custom domains should be added explicitly above for proper routing
+    # This is a fallback that will reject unmatched SNI with error
+    wildcard-https:
+      entryPoints:
+        - websecure
+      rule: "HostSNI(`*`)"
+      service: default-service
+      priority: 1
+      tls:
+        passthrough: true
 
   services:
 %{ for team_id, team_config in teams ~}

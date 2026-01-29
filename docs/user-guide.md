@@ -1,30 +1,54 @@
-# Руководство пользователя AI Camp Infrastructure
- 
+# Руководство для команд AI Talent Camp
+
 > **Последнее обновление:** 2026-01-29  
-> **Связанные документы:** [quickstart.md](quickstart.md), [xray-configuration.md](xray-configuration.md), [troubleshooting.md](troubleshooting.md)
+> **Для команд участников**  
+> **Связанные документы:** [quickstart.md](quickstart.md), [troubleshooting.md](troubleshooting.md)
 
-## Содержание
+## Введение
 
-1. [Подключение по SSH](#подключение-по-ssh)
-2. [Настройка окружения команды](#настройка-окружения-команды)
-3. [Проверка NAT и TPROXY](#проверка-nat-и-tproxy)
-4. [Traefik routing](#traefik-routing)
-5. [Управление конфигурацией Xray (VPN/Proxy)](#управление-конфигурацией-xray-vpnproxy)
-6. [Troubleshooting](#troubleshooting)
+Это полное руководство для команд участников AI Talent Camp. Вы получаете выделенную виртуальную машину (VM) в облаке с полным контролем и root доступом.
+
+**Что у вас есть:**
+- Виртуальная машина Ubuntu 22.04 LTS
+- 4 vCPU, 8GB RAM, 65GB SSD
+- Полный sudo доступ
+- Доступ в интернет (включая AI API)
+- Доменное имя `teamXX.camp.aitalenthub.com`
+- SSH доступ через центральную точку входа
+
+**Что вам нужно сделать:**
+- Установить необходимое ПО (Docker, Nginx, и т.д.)
+- Настроить reverse proxy
+- Получить SSL сертификаты
+- Развернуть ваше приложение
+- Настроить автоматический деплой
 
 ---
 
-## Подключение по SSH
+## Содержание
 
-### Для команд (используя сгенерированные ключи)
+1. [Подключение к VM](#подключение-к-vm)
+2. [Настройка окружения](#настройка-окружения)
+3. [Работа с доменами](#работа-с-доменами)
+4. [Развертывание приложений](#развертывание-приложений)
+5. [CI/CD и автодеплой](#cicd-и-автодеплой)
+6. [Базы данных](#базы-данных)
+7. [Мониторинг и логи](#мониторинг-и-логи)
+8. [Troubleshooting](#troubleshooting)
 
-Каждая команда получает папку `secrets/team-XX/` со всеми необходимыми ключами.
+---
 
-#### Шаг 1: Копирование ключей
+## Подключение к VM
+
+### Через терминал (SSH)
+
+Вы получите папку `team-XX` с SSH ключами.
+
+**Шаг 1: Копирование ключей**
 
 ```bash
-# Скопировать папку в ~/.ssh/
-cp -r secrets/team-01 ~/.ssh/ai-camp
+# Скопировать папку с ключами
+cp -r team-01 ~/.ssh/ai-camp
 
 # Установить правильные права доступа
 chmod 700 ~/.ssh/ai-camp
@@ -33,686 +57,847 @@ chmod 644 ~/.ssh/ai-camp/*.pub
 chmod 644 ~/.ssh/ai-camp/ssh-config
 ```
 
-#### Шаг 2: Подключение к VM
+**Шаг 2: Подключение**
 
 ```bash
-# Использовать готовый SSH config
+# Использовать готовый конфиг
 ssh -F ~/.ssh/ai-camp/ssh-config team01
+
+# Или добавить в ваш ~/.ssh/config
+cat ~/.ssh/ai-camp/ssh-config >> ~/.ssh/config
+ssh team01
 ```
 
-SSH config уже настроен с:
-- Правильными ключами для bastion и VM
-- ProxyJump через bastion
-- Отключенной проверкой host keys (для удобства)
-
-#### Структура ключей
+**Структура ключей:**
 
 | Файл | Назначение |
 |------|------------|
-| `teamXX-jump-key` | Приватный ключ для подключения к bastion |
-| `teamXX-key` | Приватный ключ для подключения к VM команды |
-| `teamXX-deploy-key` | Приватный ключ для GitHub Actions / CI/CD |
+| `teamXX-jump-key` | Ключ для подключения (часть 1) |
+| `teamXX-key` | Ключ для подключения (часть 2) |
+| `teamXX-deploy-key` | Ключ для CI/CD (GitHub Actions) |
 | `ssh-config` | Готовый SSH конфиг |
 
-### Для админа (через jump-host)
+### Через IDE (VSCode/Cursor)
 
-```bash
-# Формат команды
-ssh -J jump@<bastion-ip> <team-user>@<team-private-ip>
+Работа через IDE удобнее - вы редактируете файлы как локальные.
 
-# Пример для team01
-ssh -J jump@bastion.camp.aitalenthub.ru team01@10.0.2.10
-```
+**VSCode:**
 
-### Настройка SSH config вручную (альтернатива)
+1. Установите расширение **"Remote - SSH"**
+2. Нажмите `Cmd/Ctrl+Shift+P` → `Remote-SSH: Connect to Host...`
+3. Выберите `Configure SSH Hosts...` → `~/.ssh/config`
+4. Добавьте содержимое из `~/.ssh/ai-camp/ssh-config`
+5. Подключитесь к `team01`
 
-Если хотите настроить SSH config самостоятельно, добавьте в `~/.ssh/config`:
+**Cursor:**
 
-```
-Host bastion
-    HostName bastion.camp.aitalenthub.ru
-    User jump
-    IdentityFile ~/.ssh/ai-camp/team01-jump-key
-    IdentitiesOnly yes
-    StrictHostKeyChecking no
+Cursor построен на VSCode и использует те же расширения - следуйте инструкции для VSCode.
 
-Host team01
-    HostName 10.0.2.10
-    User team01
-    ProxyJump bastion
-    IdentityFile ~/.ssh/ai-camp/team01-key
-    IdentitiesOnly yes
-    StrictHostKeyChecking no
-```
-
-После этого подключение:
-
-```bash
-ssh team01
-```
+Подробная инструкция: [quickstart.md - Подключение через IDE](quickstart.md#вариант-c-подключение-через-vscodecursor)
 
 ### Копирование файлов
 
 ```bash
-# Через scp с готовым SSH config
-scp -F ~/.ssh/ai-camp/ssh-config file.txt team01:~/
+# Через scp
+scp -F ~/.ssh/ai-camp/ssh-config file.txt team01:~/workspace/
 
-# Или через jump-host напрямую
-scp -J jump@bastion.camp.aitalenthub.ru file.txt team01@10.0.2.10:~/
+# Загрузить файл с VM
+scp -F ~/.ssh/ai-camp/ssh-config team01:~/workspace/file.txt ./
 ```
 
 ---
 
-## Настройка окружения команды
+## Настройка окружения
 
-### Базовая VM
+### Обновление системы
 
-Team VM создаётся с минимальной конфигурацией:
-- Ubuntu 22.04 LTS
-- Пользователь с sudo правами
-- Рабочая директория `/home/<user>/workspace`
-
-**Команды устанавливают всё необходимое сами:**
-- Docker (если нужен)
-- Nginx / веб-сервер (если нужен)
-- Языки программирования и инструменты
-
-### Установка Docker (пример)
+Первым делом обновите пакеты:
 
 ```bash
-# Подключиться к VM
-ssh -F ~/.ssh/ai-camp/ssh-config team01
+sudo apt update
+sudo apt upgrade -y
+```
 
+### Установка Docker и Docker Compose
+
+Docker - рекомендуемый способ развертывания приложений.
+
+```bash
 # Установить Docker
 sudo apt update
-sudo apt install -y docker.io docker-compose
+sudo apt install -y docker.io docker-compose-plugin
+
+# Запустить и добавить в автозагрузку
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# Добавить пользователя в группу docker
-sudo usermod -aG docker team01
-# Выйти и зайти снова для применения группы
+# Добавить пользователя в группу docker (чтобы не использовать sudo)
+sudo usermod -aG docker $USER
+
+# Применить группу (нужно перезайти или использовать newgrp)
+newgrp docker
+
+# Проверить установку
+docker --version
+docker compose version
 ```
 
-### Установка Nginx (пример)
+### Установка Nginx (reverse proxy)
+
+Nginx будет принимать HTTPS трафик и проксировать на ваше приложение.
 
 ```bash
+# Установить Nginx
 sudo apt install -y nginx
+
+# Запустить и добавить в автозагрузку
 sudo systemctl enable nginx
 sudo systemctl start nginx
+
+# Проверить статус
+sudo systemctl status nginx
 ```
 
-### Настройка приложения
+**Проверка:** Откройте `http://<ваш-домен>` - должна отображаться стандартная страница Nginx.
 
-#### Пример: Node.js приложение
+### Базовая конфигурация Nginx
+
+Создайте конфигурацию для вашего приложения:
 
 ```bash
-# Установить Node.js
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Создать приложение
-cd ~/workspace
-npm init -y
-npm install express
-
-# Запустить на порту 3000
-node app.js
+sudo nano /etc/nginx/sites-available/myapp
 ```
 
-#### Пример: Python приложение
+**Пример конфигурации (HTTP, пока без SSL):**
 
-```bash
-# Установить Python и зависимости
-sudo apt install -y python3 python3-pip python3-venv
+```nginx
+server {
+    listen 80;
+    server_name team01.camp.aitalenthub.com;
 
-# Создать виртуальное окружение
-cd ~/workspace
-python3 -m venv venv
-source venv/bin/activate
-pip install flask
-
-# Запустить на порту 5000
-flask run --host=0.0.0.0 --port=5000
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
-### Получение SSL-сертификата
-
-Если используете Nginx:
+**Активировать конфигурацию:**
 
 ```bash
-# Установить certbot
+# Создать символическую ссылку
+sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+
+# Удалить дефолтную конфигурацию
+sudo rm /etc/nginx/sites-enabled/default
+
+# Проверить конфигурацию
+sudo nginx -t
+
+# Перезагрузить Nginx
+sudo systemctl reload nginx
+```
+
+### Получение SSL сертификата
+
+Let's Encrypt предоставляет бесплатные SSL сертификаты.
+
+```bash
+# Установить Certbot
 sudo apt install -y certbot python3-certbot-nginx
 
 # Получить сертификат
-sudo certbot --nginx -d team01.camp.aitalenthub.ru
+sudo certbot --nginx -d team01.camp.aitalenthub.com
 
-# Автоматическое обновление уже настроено
+# Следуйте инструкциям:
+# 1. Введите email
+# 2. Согласитесь с ToS
+# 3. Выберите "2" (Redirect HTTP to HTTPS)
+```
+
+**Certbot автоматически:**
+- Получит сертификат
+- Обновит конфигурацию Nginx для HTTPS
+- Настроит автоматическое обновление сертификата
+
+**Проверить автообновление:**
+
+```bash
+# Посмотреть таймер
+sudo systemctl status certbot.timer
+
+# Тестовый запуск обновления
+sudo certbot renew --dry-run
 ```
 
 ---
 
-## Проверка NAT и TPROXY
+## Работа с доменами
 
-### Проверка исходящего трафика
+### Ваш стандартный домен
+
+Вы получаете: **`teamXX.camp.aitalenthub.com`**
+
+Где `XX` - номер команды (01, 02, и т.д.)
+
+### Переименование домена
+
+Вы можете изменить часть `teamXX` на своё название:
+
+**Шаги:**
+
+1. Создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new)
+2. Заголовок: `Запрос на изменение домена для teamXX`
+3. Укажите:
+   ```
+   Текущий домен: team01.camp.aitalenthub.com
+   Желаемое имя: myteam (только латиница, цифры, дефис)
+   Новый домен: myteam.camp.aitalenthub.com
+   ```
+4. Администратор обновит конфигурацию (обычно 1 рабочий день)
+5. После одобрения обновите настройки на вашей VM
+
+**Требования к имени:**
+- Длина: 3-20 символов
+- Разрешены: латиница (a-z), цифры (0-9), дефис (-)
+- Примеры: `myteam`, `cool-project`, `hack2026`
+
+**После смены домена на вашей VM:**
 
 ```bash
-# Проверить внешний IP (должен быть IP edge VM)
-curl ifconfig.co
+# 1. Обновить конфигурацию Nginx
+sudo nano /etc/nginx/sites-available/myapp
+# Изменить server_name на новый домен
 
-# Проверить доступ к интернету
-curl -I https://google.com
+# 2. Получить новый SSL сертификат
+sudo certbot --nginx -d myteam.camp.aitalenthub.com
 
-# Проверить DNS
-nslookup google.com
+# 3. Перезагрузить Nginx
+sudo systemctl reload nginx
 ```
 
-### Проверка маршрутов
+### Использование собственного домена
+
+Если у вас есть свой домен, вы можете использовать его для доступа к вашему приложению.
+
+**Шаг 1: Создать запрос на добавление домена**
+
+Для корректной маршрутизации кастомного домена через центральный reverse proxy (Traefik), создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new):
+
+```
+Заголовок: Добавление кастомного домена для teamXX
+Описание:
+  Команда: team01
+  Кастомный домен: app.mydomain.com
+  Тип: HTTP + HTTPS (TLS passthrough)
+```
+
+Администратор добавит ваш домен в конфигурацию Traefik (обычно 1 рабочий день).
+
+**Шаг 2: Настройка DNS**
+
+После одобрения запроса, зайдите в панель управления вашего DNS провайдера (Cloudflare, Namecheap, и т.д.):
+
+**CNAME**
+```
+Тип: CNAME
+Имя: app (или любое другое: www, api, и т.д.)
+Значение: team01.camp.aitalenthub.com
+TTL: Auto или 300
+```
+
+**Пример:**
+```
+app.mydomain.com → team01.camp.aitalenthub.com (CNAME)
+```
+
+**Шаг 3: Проверка DNS (может занять до 48 часов)**
 
 ```bash
-# Посмотреть таблицу маршрутизации
-ip route
+# Проверить CNAME запись
+dig app.mydomain.com
 
-# Должен быть маршрут через edge VM:
-# default via 10.0.1.x dev eth0
+# Должно быть (для CNAME):
+# app.mydomain.com. 300 IN CNAME team01.camp.aitalenthub.com.
+# team01.camp.aitalenthub.com. 300 IN A <IP edge VM>
+
+# Для A-записи:
+# app.mydomain.com. 300 IN A <IP edge VM>
 ```
 
-### Проверка TPROXY (прозрачное проксирование)
+**Шаг 4: Настройка Nginx на вашей VM**
 
-TPROXY автоматически перехватывает трафик и маршрутизирует через VLESS proxy:
+Добавьте ваш домен в конфигурацию:
 
 ```bash
-# Проверить, что AI API идут через proxy
-curl -v https://api.openai.com/v1/models
-
-# Проверить YouTube (тоже через proxy)
-curl -I https://www.youtube.com
-
-# Обычные сайты идут напрямую
-curl -I https://google.com
+sudo nano /etc/nginx/sites-available/myapp
 ```
 
-**Важно:** Команды не настраивают ничего - всё работает прозрачно. Весь трафик из private subnet автоматически перехватывается на edge VM и маршрутизируется по правилам Xray.
+Добавьте ваш домен в `server_name`:
 
-### Что идёт через VLESS proxy
+```nginx
+server {
+    listen 80;
+    server_name team01.camp.aitalenthub.com app.mydomain.com;
+    # ... остальная конфигурация
+}
+```
 
-- AI APIs (OpenAI, Anthropic, Google AI, Groq, Mistral и др.)
-- Соцсети (YouTube, Instagram, TikTok, LinkedIn, Telegram, Notion)
-- Остальной трафик идёт напрямую (direct)
+**Шаг 5: Получить SSL сертификат**
+
+```bash
+# Получить сертификат для вашего домена
+sudo certbot --nginx -d app.mydomain.com
+
+# Или для обоих доменов сразу
+sudo certbot --nginx -d team01.camp.aitalenthub.com -d app.mydomain.com
+```
+
+**Важно:** 
+- ⚠️ Без добавления домена в конфигурацию Traefik (Шаг 1), ваш кастомный домен не будет работать
+- ✅ Стандартный домен `teamXX.camp.aitalenthub.com` работает сразу без дополнительных настроек
 
 ---
 
-## Traefik routing
+## Развертывание приложений
 
-### Как работает маршрутизация
+### Docker Compose
 
+Docker Compose позволяет описать всё приложение в одном файле.
+
+#### Пример: Python FastAPI
+
+**docker-compose.yml:**
+
+```yaml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: fastapi-app
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/mydb
+    depends_on:
+      - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+  db:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: mydb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
 ```
-Internet → Edge VM (Traefik) → Team VM
-                  │
-                  ├─ team01.camp.aitalenthub.ru → Team01 VM:80/443
-                  ├─ team02.camp.aitalenthub.ru → Team02 VM:80/443
-                  └─ ...
+
+**Dockerfile:**
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
-
-### TLS Passthrough
-
-Traefik настроен в режиме TLS passthrough - SSL-терминация происходит на team VM.
-
-Это означает:
-1. Traefik не расшифровывает трафик
-2. Сертификат должен быть на team VM
-3. Полная end-to-end шифрование
-
-### Добавление нового team
-
-После добавления team в terraform.tfvars:
-
-1. Применить terraform:
-   ```bash
-   terraform apply
-   ```
-
-2. Traefik динамическая конфигурация генерируется автоматически в `secrets/traefik-dynamic.yml`
-
-3. Скопировать на edge VM (если нужно обновить вручную):
-   ```bash
-   scp -F ~/.ssh/ai-camp/ssh-config secrets/traefik-dynamic.yml jump@bastion:/opt/traefik/dynamic/teams.yml
-   ```
-
-   Обычно это не требуется - конфигурация обновляется автоматически при `terraform apply`.
 
 ---
 
-## Управление конфигурацией Xray (VPN/Proxy)
+## CI/CD и автодеплой
 
-### Как работает Xray
+### GitHub Actions
 
-Xray запущен на edge VM как systemd сервис и обеспечивает прозрачное проксирование (TPROXY):
-- Перехватывает TCP/UDP трафик из private subnet
-- Маршрутизирует по правилам: AI APIs и соцсети через VLESS proxy, остальное напрямую
-- Конфигурация: `/opt/xray/config.json`
+Подключение к VM из CI/CD идёт **через jump-сервер (bastion)** — так же, как при ручном SSH. Нужны оба ключа: для bastion и для VM.
 
-### Изменение конфигурации Xray
+#### Шаг 1: Добавить ключи в GitHub Secrets
 
-#### Вариант 1: Через Terraform (рекомендуется)
+Подключение к VM двухшаговое: сначала bastion, затем VM. В секреты репозитория нужно добавить **два** ключа.
 
-Самый удобный способ — редактировать JSON конфиг и применять через Terraform.
-
-**Первый запуск:**
-
-1. После первого `terraform apply` создастся файл `secrets/xray-config.json`
-
-2. Отредактируйте его напрямую (весь JSON целиком):
-   ```bash
-   nano secrets/xray-config.json
-   ```
-
-   Или используйте пример:
-   ```bash
-   cp templates/xray/config.example.json secrets/xray-config.json
-   # Отредактируйте VLESS параметры
-   ```
-
-3. Примените изменения:
-   ```bash
-   cd environments/dev
-   terraform apply
-   ```
-
-   Terraform автоматически:
-   - Загрузит `secrets/xray-config.json` на edge VM
-   - Перезапустит Xray сервис
-
-**Последующие изменения:**
-
-Просто отредактируйте `secrets/xray-config.json` и запустите `terraform apply`.
-
-Можно менять:
-- VLESS параметры (server, uuid, public_key и т.д.)
-- Routing правила (добавлять/удалять домены)
-- DNS настройки
-- Логирование
-
-**Важно:** Убедитесь что `jump_private_key_path` указывает на правильный SSH ключ:
-```hcl
-# В terraform.tfvars (раскомментировать если нужен другой путь)
-jump_private_key_path = "~/.ssh/id_ed25519"
-```
-
-#### Вариант 2: Редактирование напрямую на edge VM
-
-Для быстрых изменений без Terraform:
+**1. Ключ для jump-сервера (bastion):**
 
 ```bash
-# Подключиться к edge VM
-ssh jump@<edge-ip>
-
-# Отредактировать конфигурацию
-sudo nano /opt/xray/config.json
-
-# Перезапустить Xray
-sudo systemctl restart xray
-
-# Проверить статус
-sudo systemctl status xray
-sudo journalctl -u xray --no-pager -n 20
+# Скопировать приватный ключ для bastion
+cat ~/.ssh/ai-camp/team01-jump-key
 ```
 
-**Внимание:** Изменения, сделанные напрямую на VM, будут перезаписаны при следующем `terraform apply`.
+В GitHub: Settings → Secrets and variables → Actions → New repository secret  
+- Name: `DEPLOY_JUMP_KEY`  
+- Value: содержимое файла `team01-jump-key`
 
-#### Вариант 3: Через локальный файл и scp
-
-1. После `terraform apply` конфиг сохраняется в `secrets/xray-config.json`
-
-2. Можно отредактировать его и загрузить вручную:
-   ```bash
-   scp secrets/xray-config.json jump@<edge-ip>:/tmp/
-   ssh jump@<edge-ip> "sudo mv /tmp/xray-config.json /opt/xray/config.json && sudo systemctl restart xray"
-   ```
-
-### Изменение routing правил
-
-Routing правила находятся в секции `routing.rules` конфигурации Xray.
-
-#### Добавить домен через proxy
-
-```json
-{
-  "type": "field",
-  "domain": [
-    "geosite:category-ai-!cn",
-    "geosite:youtube",
-    "domain:example.com",
-    "full:api.example.com"
-  ],
-  "outboundTag": "proxy"
-}
-```
-
-#### Добавить домен напрямую (bypass proxy)
-
-```json
-{
-  "type": "field",
-  "domain": ["domain:mysite.ru"],
-  "outboundTag": "direct"
-}
-```
-
-#### Блокировать домен
-
-```json
-{
-  "type": "field",
-  "domain": ["domain:blocked.com"],
-  "outboundTag": "block"
-}
-```
-
-### Доступные geosite категории
-
-- `geosite:category-ai-!cn` - AI сервисы (OpenAI, Anthropic, Google AI и др.)
-- `geosite:youtube` - YouTube
-- `geosite:instagram` - Instagram
-- `geosite:tiktok` - TikTok
-- `geosite:linkedin` - LinkedIn
-- `geosite:telegram` - Telegram
-- `geosite:notion` - Notion
-- `geosite:github` - GitHub
-- `geosite:google` - Google сервисы
-
-### Пример: Добавить GitHub через proxy
-
-Отредактируйте `/opt/xray/config.json` на edge VM:
-
-```json
-{
-  "type": "field",
-  "domain": [
-    "geosite:category-ai-!cn",
-    "geosite:notion",
-    "geosite:youtube",
-    "geosite:instagram",
-    "geosite:tiktok",
-    "geosite:linkedin",
-    "geosite:telegram",
-    "geosite:github"
-  ],
-  "outboundTag": "proxy"
-}
-```
-
-Затем перезапустите Xray:
-```bash
-sudo systemctl restart xray
-```
-
-### Изменение VLESS сервера
-
-Если нужно сменить VLESS сервер:
-
-1. Отредактировать `secrets/xray-config.json`, найти секцию `outbounds` с `"tag": "proxy"`:
-   ```json
-   {
-     "tag": "proxy",
-     "protocol": "vless",
-     "settings": {
-       "vnext": [{
-         "address": "new-server.example.com",
-         "port": 443,
-         "users": [{
-           "id": "your-new-uuid",
-           "flow": "xtls-rprx-vision",
-           "encryption": "none"
-         }]
-       }]
-     },
-     "streamSettings": {
-       "network": "tcp",
-       "security": "reality",
-       "realitySettings": {
-         "fingerprint": "chrome",
-         "serverName": "www.microsoft.com",
-         "publicKey": "new-public-key",
-         "shortId": "new-short-id",
-         "spiderX": ""
-       }
-     }
-   }
-   ```
-
-2. Также обновить IP в routing правилах (секция `routing.rules`), найти правило с комментарием `"_comment": "Exclude VLESS server IP"`:
-   ```json
-   {
-     "type": "field",
-     "ip": ["1.2.3.4"],
-     "outboundTag": "direct"
-   }
-   ```
-
-3. Применить изменения (**без пересоздания edge VM**):
-   ```bash
-   cd environments/dev
-   terraform apply
-   ```
-
-   Terraform автоматически обновит конфиг и перезапустит Xray.
-
-4. **Дополнительно:** если изменился IP VLESS сервера, нужно обновить iptables правило:
-   ```bash
-   ssh jump@<edge-ip>
-   # Удалить старое правило
-   sudo iptables -t mangle -D XRAY -d <old-vless-ip> -j RETURN
-   # Добавить новое
-   sudo iptables -t mangle -I XRAY 5 -d <new-vless-ip> -j RETURN
-   # Сохранить
-   sudo netfilter-persistent save
-   ```
-
-### Отключение TPROXY (только NAT)
-
-Если нужно временно отключить прозрачное проксирование:
+**2. Ключ для доступа к VM:**
 
 ```bash
-# На edge VM
-sudo iptables -t mangle -D PREROUTING -s 10.20.0.0/24 -j XRAY
-sudo systemctl stop xray
+# Скопировать приватный ключ для VM (тот же, что для ручного SSH)
+cat ~/.ssh/ai-camp/team01-deploy-key
 ```
 
-Трафик будет идти напрямую через NAT (MASQUERADE).
+В GitHub: New repository secret  
+- Name: `DEPLOY_KEY`  
+- Value: содержимое файла `team01-deploy-key`
 
-Для включения обратно:
-```bash
-sudo systemctl start xray
-sudo iptables -t mangle -A PREROUTING -s 10.20.0.0/24 -j XRAY
+**Примечание:** Приватный IP вашей VM и hostname bastion возьмите из выданного вам `ssh-config` (поля `HostName` для bastion и для team01).
+
+#### Шаг 2: Создать workflow с ProxyJump
+
+В workflow подключаемся к VM так же, как вручную: через jump-сервер (bastion). Используется `ProxyCommand`: сначала SSH на bastion с jump-ключом, затем на VM с ключом VM для CI/CD.
+
+Значения `BASTION_HOST`, `TEAM_VM_IP`, `TEAM_USER` берите из выданного файла `ssh-config` (в папке `team-XX/`): там указаны `HostName` для bastion и для вашей VM (приватный IP), а также имя пользователя.
+
+`.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  BASTION_HOST: bastion.camp.aitalenthub.com
+  TEAM_VM_IP: 10.20.0.5
+  TEAM_USER: team01
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup SSH and known hosts
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        ssh-keyscan -H ${{ env.BASTION_HOST }} >> ~/.ssh/known_hosts
+    
+    - name: Deploy with Docker Compose
+      env:
+        JUMP_KEY: ${{ secrets.DEPLOY_JUMP_KEY }}
+        VM_KEY: ${{ secrets.DEPLOY_KEY }}
+      run: |
+        echo "$JUMP_KEY" > ~/.ssh/jump_key
+        echo "$VM_KEY" > ~/.ssh/vm_key
+        chmod 600 ~/.ssh/jump_key ~/.ssh/vm_key
+        ssh -o ProxyCommand="ssh -i ~/.ssh/jump_key -W %h:%p jump@${{ env.BASTION_HOST }}" \
+            -i ~/.ssh/vm_key ${{ env.TEAM_USER }}@${{ env.TEAM_VM_IP }} << 'REMOTE'
+          cd ~/workspace/myapp
+          git pull origin main
+          docker compose down
+          docker compose build
+          docker compose up -d
+        REMOTE
 ```
 
-### Диагностика
+**Важно:** Значения `BASTION_HOST`, `TEAM_VM_IP`, `TEAM_USER` возьмите из выданного вам файла `ssh-config` в папке `team-XX/`.
+
+---
+
+## Базы данных
+
+### PostgreSQL в Docker
+
+**docker-compose.yml:**
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres-data:
+```
+
+**Подключение:**
 
 ```bash
-# Проверить статус Xray
-sudo systemctl status xray
+# Из приложения на той же VM
+DATABASE_URL=postgresql://myuser:mypassword@localhost:5432/mydb
 
-# Смотреть логи в реальном времени
-sudo journalctl -u xray -f
+# Подключиться через psql
+docker exec -it postgres psql -U myuser -d mydb
+```
 
-# Проверить access log (какой трафик обрабатывается)
-sudo tail -f /var/log/xray/access.log
+### MongoDB в Docker
 
-# Проверить error log
-sudo cat /var/log/xray/error.log
+```yaml
+services:
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
 
-# Проверить конфигурацию (валидность JSON)
-/usr/local/bin/xray run -test -config /opt/xray/config.json
+volumes:
+  mongodb-data:
+```
+
+**Подключение:**
+
+```bash
+# Connection string
+mongodb://admin:password@localhost:27017
+
+# Подключиться через mongosh
+docker exec -it mongodb mongosh -u admin -p password
+```
+
+### Redis в Docker
+
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
+```
+
+**Подключение:**
+
+```bash
+# Из приложения
+REDIS_URL=redis://localhost:6379
+
+# Подключиться через redis-cli
+docker exec -it redis redis-cli
+```
+
+---
+
+## Мониторинг и логи
+
+### Системные логи
+
+```bash
+# Все системные логи
+sudo journalctl -f
+
+# Логи конкретного сервиса
+sudo journalctl -u myapp -f
+
+# Логи за последний час
+sudo journalctl --since "1 hour ago"
+
+# Логи Nginx
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Docker логи
+
+```bash
+# Логи контейнера
+docker logs -f myapp
+
+# Логи всех контейнеров в docker-compose
+docker compose logs -f
+
+# Логи конкретного сервиса
+docker compose logs -f app
+```
+
+### Мониторинг ресурсов
+
+```bash
+# CPU и память
+htop
+# или
+btop
+
+# Использование диска
+df -h
+
+# Использование диска по папкам
+du -sh ~/workspace/*
+
+# Docker использование диска
+docker system df
+
+# Очистка Docker (осторожно!)
+docker system prune -a
 ```
 
 ---
 
 ## Troubleshooting
 
-### VM не имеет доступа в интернет
+### Не могу подключиться по SSH
 
-1. Проверить маршрут:
-   ```bash
-   ip route | grep default
-   ```
+**Проверить права на ключи:**
 
-2. Проверить NAT на edge:
-   ```bash
-   # На edge VM
-   sudo iptables -t nat -L -n -v | grep MASQUERADE
-   ```
+```bash
+ls -la ~/.ssh/ai-camp/
+# Должно быть:
+# drwx------ (700) для директории
+# -rw------- (600) для приватных ключей
+# -rw-r--r-- (644) для публичных ключей
 
-3. Проверить security group
+# Исправить если нужно
+chmod 700 ~/.ssh/ai-camp
+chmod 600 ~/.ssh/ai-camp/*-key
+chmod 644 ~/.ssh/ai-camp/*.pub
+```
 
-### Не работает SSH через jump-host
+**Проверить подключение:**
 
-1. Проверить доступ к bastion:
-   ```bash
-   ssh -v jump@bastion.camp.aitalenthub.ru
-   ```
+```bash
+# С verbose выводом
+ssh -vvv -F ~/.ssh/ai-camp/ssh-config team01
+```
 
-2. Проверить ключи:
-   ```bash
-   ssh-add -l
-   ls -la ~/.ssh/ai-camp/
-   ```
+**Проверить доступность центральной точки входа:**
 
-3. Проверить AllowTcpForwarding на edge:
-   ```bash
-   # На edge VM
-   grep AllowTcpForwarding /etc/ssh/sshd_config.d/*
-   ```
+```bash
+ping bastion.camp.aitalenthub.com
+```
 
-### TPROXY не работает
+### Приложение не доступно извне
 
-1. Проверить Xray сервис запущен:
-   ```bash
-   # На edge VM
-   sudo systemctl status xray
-   sudo journalctl -u xray -f
-   ```
+**1. Проверить что приложение запущено:**
 
-2. Проверить iptables правила:
-   ```bash
-   # На edge VM
-   sudo iptables -t mangle -L PREROUTING -n -v
-   sudo iptables -t mangle -L XRAY -n -v
-   ```
+```bash
+# Посмотреть открытые порты
+sudo ss -tlnp | grep -E ':(80|443|3000|5000|8000)'
 
-3. Проверить policy routing:
-   ```bash
-   # На edge VM
-   ip rule show
-   ip route show table 100
-   ```
+# Должны видеть ваше приложение
+```
 
-4. Проверить, что VLESS server IP исключён:
-   ```bash
-   # На edge VM
-   sudo iptables -t mangle -L XRAY -n -v | grep <vless-server-ip>
-   ```
+**2. Проверить Nginx:**
 
-5. Проверить логи Xray:
-   ```bash
-   # На edge VM
-   cat /var/log/xray/error.log
-   cat /var/log/xray/access.log
-   ```
+```bash
+# Статус
+sudo systemctl status nginx
 
-### Сайт недоступен извне
+# Проверить конфигурацию
+sudo nginx -t
 
-1. Проверить, что приложение запущено:
-   ```bash
-   # На team VM
-   sudo ss -tlnp | grep -E ':(80|443|3000|5000)'
-   ```
+# Логи ошибок
+sudo tail -f /var/log/nginx/error.log
+```
 
-2. Проверить Traefik на edge:
-   ```bash
-   # На edge VM
-   docker logs traefik
-   ```
+**3. Проверить файрвол (если настраивали):**
 
-3. Проверить DNS:
-   ```bash
-   dig team01.camp.aitalenthub.ru
-   ```
+```bash
+# Посмотреть правила
+sudo ufw status
 
-4. Проверить security groups
+# Разрешить HTTP и HTTPS
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
 
-### Certbot не может получить сертификат
+**4. Проверить DNS:**
 
-1. Проверить DNS:
-   ```bash
-   dig team01.camp.aitalenthub.ru
-   ```
+```bash
+# Проверить что домен указывает на правильный IP
+dig team01.camp.aitalenthub.com
+```
 
-2. Проверить доступность порта 80 через Traefik:
-   ```bash
-   # С внешней машины
-   curl -v http://team01.camp.aitalenthub.ru/.well-known/acme-challenge/test
-   ```
+### Ошибка "Permission denied" в Docker
 
-3. Проверить, что Nginx слушает на порту 80:
-   ```bash
-   # На team VM
-   sudo ss -tlnp | grep :80
-   ```
+```bash
+# Добавить пользователя в группу docker
+sudo usermod -aG docker $USER
 
-### GitHub Actions / CI/CD
+# Применить изменения (нужно перезайти)
+newgrp docker
 
-Для использования deploy key в GitHub Actions:
+# Или выйти и зайти снова
+exit
+ssh -F ~/.ssh/ai-camp/ssh-config team01
+```
 
-1. Скопировать публичный ключ:
-   ```bash
-   cat ~/.ssh/ai-camp/team01-deploy-key.pub
-   ```
+### Нет места на диске
 
-2. Добавить в GitHub repo:
-   - Settings → Deploy keys → Add deploy key
-   - Вставить публичный ключ
-   - Выбрать "Allow write access" если нужно
+```bash
+# Посмотреть использование
+df -h
 
-3. Использовать в GitHub Actions:
-   ```yaml
-   - name: Setup SSH
-     uses: webfactory/ssh-agent@v0.7.0
-     with:
-       ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+# Найти большие файлы
+du -sh ~/workspace/* | sort -h
 
-   - name: Deploy
-     run: |
-       ssh -F ~/.ssh/ai-camp/ssh-config team01 "cd ~/workspace && git pull"
-   ```
+# Очистить Docker
+docker system prune -a --volumes
+
+# Очистить логи
+sudo journalctl --vacuum-time=7d
+```
+
+### SSL сертификат не обновляется
+
+```bash
+# Проверить таймер certbot
+sudo systemctl status certbot.timer
+
+# Запустить обновление вручную
+sudo certbot renew --dry-run
+
+# Если есть ошибки, посмотреть логи
+sudo tail -f /var/log/letsencrypt/letsencrypt.log
+```
+
+### Docker контейнер постоянно перезапускается
+
+```bash
+# Посмотреть логи
+docker logs myapp
+
+# Посмотреть последние 100 строк
+docker logs --tail 100 myapp
+
+# Запустить контейнер в интерактивном режиме для отладки
+docker run -it myapp /bin/sh
+```
+
+### Высокая нагрузка CPU/памяти
+
+```bash
+# Посмотреть процессы
+htop
+
+# Найти процесс с высокой нагрузкой
+top
+
+# или использовать
+btop
+
+# Посмотреть использование ресурсов Docker контейнерами
+docker stats
+
+# Ограничить ресурсы контейнера в docker-compose.yml:
+services:
+  app:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+```
 
 ---
 
 ## Полезные команды
 
+### Системные
+
 ```bash
-# Системная информация
-htop
-df -h
-free -m
+# Информация о системе
 uname -a
+lsb_release -a
 
-# Сеть
-ip addr
-ip route
-ss -tlnp
-curl ifconfig.co
+# Использование ресурсов
+btop
+free -m
+df -h
 
-# Docker (если установлен)
+# Процессы
+ps aux | grep myapp
+pgrep -a myapp
+```
+
+### Docker
+
+```bash
+# Список контейнеров
 docker ps -a
-docker system df
-docker system prune
 
 # Логи
-sudo journalctl -f
-sudo tail -f /var/log/syslog
+docker logs -f container_name
 
-# Проверка подключения
-ping 8.8.8.8
-curl -I https://google.com
+# Войти в контейнер
+docker exec -it container_name /bin/bash
+
+# Статистика ресурсов
+docker stats
+
+# Очистка
+docker system prune -a
 ```
+
+### Nginx
+
+```bash
+# Проверить конфигурацию
+sudo nginx -t
+
+# Перезагрузить
+sudo systemctl reload nginx
+
+# Логи
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Git
+
+```bash
+# Клонировать репозиторий
+git clone https://github.com/user/repo.git
+
+# Обновить
+git pull origin main
+
+# Посмотреть статус
+git status
+
+# История коммитов
+git log --oneline
+```
+
+---
+
+## См. также
+
+- [quickstart.md](quickstart.md) - быстрый старт для новичков
+- [troubleshooting.md](troubleshooting.md) - подробное решение проблем
+- [README.md](../README.md) - общая информация о проекте
+
+---
+
+**Нужна помощь?** Создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new).

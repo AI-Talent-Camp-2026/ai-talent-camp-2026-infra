@@ -1,7 +1,7 @@
 #cloud-config
 
 # =============================================================================
-# AI Camp Team VM - Minimal Configuration
+# AI Talent Camp Team VM - Minimal Configuration
 # =============================================================================
 # Teams will install their own software (docker, nginx, etc.) as needed.
 # =============================================================================

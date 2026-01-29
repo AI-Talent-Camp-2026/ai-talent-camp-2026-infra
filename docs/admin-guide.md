@@ -5,7 +5,7 @@
 
 ## Обзор
 
-Это руководство для администраторов, управляющих инфраструктурой AI Camp через Terraform.
+Это руководство для администраторов, управляющих инфраструктурой AI Talent Camp через Terraform.
 
 ---
 
@@ -96,26 +96,8 @@ yc resource-manager folder add-access-binding <folder-id> \
 # Создать authorized key
 yc iam key create \
   --service-account-name terraform-sa \
-  --output key.json
+  --output secrets/key.json
 ```
-
-### 3. Настройка credentials для Terraform
-
-**Вариант A: Service Account Key (рекомендуется)**
-
-```bash
-export YC_SERVICE_ACCOUNT_KEY_FILE=/path/to/key.json
-```
-
-**Вариант B: OAuth Token**
-
-```bash
-export YC_TOKEN=$(yc iam create-token)
-export YC_CLOUD_ID=$(yc config get cloud-id)
-export YC_FOLDER_ID=$(yc config get folder-id)
-```
-
-⚠️ **Важно:** OAuth token действителен 12 часов. Обновляйте перед длительными операциями.
 
 ---
 
@@ -124,7 +106,7 @@ export YC_FOLDER_ID=$(yc config get folder-id)
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://gitlab.com/aitalenthub-core/ai-talent-camp-2026-infra.git
+git clone https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra.git
 cd ai-talent-camp-2026-infra
 ```
 
@@ -458,6 +440,93 @@ tcp:
 
 При добавлении новой команды конфиг обновляется автоматически через `terraform apply`.
 
+### Добавление кастомных доменов
+
+Когда команда запрашивает использование собственного домена (например, `app.mydomain.com`), нужно добавить его в Traefik конфигурацию.
+
+**Шаг 1: Получить запрос**
+
+Команда должна создать issue с информацией:
+- Номер команды (например, team01)
+- Кастомный домен (например, app.mydomain.com)
+- Тип: HTTP и/или HTTPS
+
+**Шаг 2: Обновить динамическую конфигурацию**
+
+Отредактируйте `secrets/traefik-dynamic.yml` на edge VM или пересоздайте через Terraform:
+
+**Для HTTPS (TLS Passthrough):**
+```yaml
+tcp:
+  routers:
+    team01-router:
+      entryPoints:
+        - websecure
+      # Добавить кастомный домен через ||
+      rule: "HostSNI(`team01.camp.aitalenthub.com`) || HostSNI(`app.mydomain.com`)"
+      service: team01-service
+      tls:
+        passthrough: true
+```
+
+**Для HTTP:**
+```yaml
+http:
+  routers:
+    team01-http:
+      entryPoints:
+        - web
+      # Добавить кастомный домен через ||
+      rule: "Host(`team01.camp.aitalenthub.com`) || Host(`app.mydomain.com`)"
+      service: team01-http-service
+```
+
+**Шаг 3: Применить изменения**
+
+```bash
+# SSH на edge VM
+ssh jump@bastion.camp.aitalenthub.com
+
+# Перезапустить Traefik (конфиг перечитается автоматически)
+docker restart traefik
+
+# Или просто подождать (~30 секунд), Traefik перечитает конфиг сам
+```
+
+**Шаг 4: Проверка**
+
+```bash
+# Проверить логи Traefik
+docker logs traefik | grep -i "app.mydomain.com"
+
+# Должно быть:
+# Configuration loaded successfully with new router
+```
+
+**Шаг 5: Уведомить команду**
+
+Сообщите команде, что домен добавлен. Команда должна:
+1. Настроить DNS (CNAME или A-запись)
+2. Обновить Nginx на своей VM
+3. Получить SSL сертификат
+
+**Альтернативный способ (через Terraform):**
+
+Если требуется постоянное решение, можно добавить поддержку кастомных доменов в переменные Terraform:
+
+```hcl
+# В terraform.tfvars
+teams = {
+  "01" = { 
+    user = "team01"
+    public_keys = []
+    custom_domains = ["app.mydomain.com", "www.mydomain.com"]
+  }
+}
+```
+
+Затем обновить `templates/traefik/dynamic.yml.tpl` для использования этих доменов.
+
 ---
 
 ## Мониторинг
@@ -646,6 +715,424 @@ terraform force-unlock <lock-id>
 # Модуль не найден
 terraform init -upgrade
 ```
+
+---
+
+## Управление прозрачным проксированием
+
+### Проверка NAT и TPROXY
+
+#### Проверка исходящего трафика
+
+```bash
+# Проверить внешний IP (должен быть IP edge VM)
+curl ifconfig.co
+
+# Проверить доступ к интернету
+curl -I https://google.com
+
+# Проверить DNS
+nslookup google.com
+```
+
+#### Проверка маршрутов
+
+```bash
+# Посмотреть таблицу маршрутизации
+ip route
+
+# Должен быть маршрут через edge VM:
+# default via 10.0.1.x dev eth0
+```
+
+#### Проверка TPROXY (прозрачное проксирование)
+
+TPROXY автоматически перехватывает трафик и маршрутизирует через VLESS proxy:
+
+```bash
+# Проверить, что AI API идут через proxy
+curl -v https://api.openai.com/v1/models
+
+# Проверить YouTube (тоже через proxy)
+curl -I https://www.youtube.com
+
+# Обычные сайты идут напрямую
+curl -I https://google.com
+```
+
+**Важно:** Весь трафик из private subnet автоматически перехватывается на edge VM и маршрутизируется по правилам Xray.
+
+#### Что идёт через VLESS proxy
+
+- AI APIs (OpenAI, Anthropic, Google AI, Groq, Mistral и др.)
+- Соцсети (YouTube, Instagram, TikTok, LinkedIn, Telegram, Notion)
+- Остальной трафик идёт напрямую (direct)
+
+### Управление Traefik routing
+
+#### Как работает маршрутизация
+
+```
+Internet → Edge VM (Traefik) → Team VM
+                  │
+                  ├─ team01.camp.aitalenthub.ru → Team01 VM:80/443
+                  ├─ team02.camp.aitalenthub.ru → Team02 VM:80/443
+                  └─ ...
+```
+
+#### TLS Passthrough
+
+Traefik настроен в режиме TLS passthrough - SSL-терминация происходит на team VM.
+
+Это означает:
+1. Traefik не расшифровывает трафик
+2. Сертификат должен быть на team VM
+3. Полная end-to-end шифрование
+
+#### Добавление нового team
+
+После добавления team в terraform.tfvars:
+
+1. Применить terraform:
+   ```bash
+   terraform apply
+   ```
+
+2. Traefik динамическая конфигурация генерируется автоматически в `secrets/traefik-dynamic.yml`
+
+3. Скопировать на edge VM (если нужно обновить вручную):
+   ```bash
+   scp -F ~/.ssh/ai-camp/ssh-config secrets/traefik-dynamic.yml jump@bastion:/opt/traefik/dynamic/teams.yml
+   ```
+
+   Обычно это не требуется - конфигурация обновляется автоматически при `terraform apply`.
+
+### Управление конфигурацией Xray
+
+#### Как работает Xray
+
+Xray запущен на edge VM как systemd сервис и обеспечивает прозрачное проксирование (TPROXY):
+- Перехватывает TCP/UDP трафик из private subnet
+- Маршрутизирует по правилам: AI APIs и соцсети через VLESS proxy, остальное напрямую
+- Конфигурация: `/opt/xray/config.json`
+
+#### Изменение конфигурации Xray
+
+##### Вариант 1: Через Terraform (рекомендуется)
+
+Самый удобный способ — редактировать JSON конфиг и применять через Terraform.
+
+**Первый запуск:**
+
+1. После первого `terraform apply` создастся файл `secrets/xray-config.json`
+
+2. Отредактируйте его напрямую (весь JSON целиком):
+   ```bash
+   nano secrets/xray-config.json
+   ```
+
+   Или используйте пример:
+   ```bash
+   cp templates/xray/config.example.json secrets/xray-config.json
+   # Отредактируйте VLESS параметры
+   ```
+
+3. Примените изменения:
+   ```bash
+   cd environments/dev
+   terraform apply
+   ```
+
+   Terraform автоматически:
+   - Загрузит `secrets/xray-config.json` на edge VM
+   - Перезапустит Xray сервис
+
+**Последующие изменения:**
+
+Просто отредактируйте `secrets/xray-config.json` и запустите `terraform apply`.
+
+Можно менять:
+- VLESS параметры (server, uuid, public_key и т.д.)
+- Routing правила (добавлять/удалять домены)
+- DNS настройки
+- Логирование
+
+**Важно:** Убедитесь что `jump_private_key_path` указывает на правильный SSH ключ:
+```hcl
+# В terraform.tfvars (раскомментировать если нужен другой путь)
+jump_private_key_path = "~/.ssh/id_ed25519"
+```
+
+##### Вариант 2: Редактирование напрямую на edge VM
+
+Для быстрых изменений без Terraform:
+
+```bash
+# Подключиться к edge VM
+ssh jump@<edge-ip>
+
+# Отредактировать конфигурацию
+sudo nano /opt/xray/config.json
+
+# Перезапустить Xray
+sudo systemctl restart xray
+
+# Проверить статус
+sudo systemctl status xray
+sudo journalctl -u xray --no-pager -n 20
+```
+
+**Внимание:** Изменения, сделанные напрямую на VM, будут перезаписаны при следующем `terraform apply`.
+
+##### Вариант 3: Через локальный файл и scp
+
+1. После `terraform apply` конфиг сохраняется в `secrets/xray-config.json`
+
+2. Можно отредактировать его и загрузить вручную:
+   ```bash
+   scp secrets/xray-config.json jump@<edge-ip>:/tmp/
+   ssh jump@<edge-ip> "sudo mv /tmp/xray-config.json /opt/xray/config.json && sudo systemctl restart xray"
+   ```
+
+#### Изменение routing правил
+
+Routing правила находятся в секции `routing.rules` конфигурации Xray.
+
+##### Добавить домен через proxy
+
+```json
+{
+  "type": "field",
+  "domain": [
+    "geosite:category-ai-!cn",
+    "geosite:youtube",
+    "domain:example.com",
+    "full:api.example.com"
+  ],
+  "outboundTag": "proxy"
+}
+```
+
+##### Добавить домен напрямую (bypass proxy)
+
+```json
+{
+  "type": "field",
+  "domain": ["domain:mysite.ru"],
+  "outboundTag": "direct"
+}
+```
+
+##### Блокировать домен
+
+```json
+{
+  "type": "field",
+  "domain": ["domain:blocked.com"],
+  "outboundTag": "block"
+}
+```
+
+#### Доступные geosite категории
+
+[https://github.com/v2fly/domain-list-community/tree/master/data](https://github.com/v2fly/domain-list-community/tree/master/data)
+
+#### Пример: Добавить GitHub через proxy
+
+Отредактируйте `/opt/xray/config.json` на edge VM:
+
+```json
+{
+  "type": "field",
+  "domain": [
+    "geosite:category-ai-!cn",
+    "geosite:notion",
+    "geosite:youtube",
+    "geosite:instagram",
+    "geosite:tiktok",
+    "geosite:linkedin",
+    "geosite:telegram",
+    "geosite:github"
+  ],
+  "outboundTag": "proxy"
+}
+```
+
+Затем перезапустите Xray:
+```bash
+sudo systemctl restart xray
+```
+
+#### Изменение VLESS сервера
+
+Если нужно сменить VLESS сервер:
+
+1. Отредактировать `secrets/xray-config.json`, найти секцию `outbounds` с `"tag": "proxy"`:
+   ```json
+   {
+     "tag": "proxy",
+     "protocol": "vless",
+     "settings": {
+       "vnext": [{
+         "address": "new-server.example.com",
+         "port": 443,
+         "users": [{
+           "id": "your-new-uuid",
+           "flow": "xtls-rprx-vision",
+           "encryption": "none"
+         }]
+       }]
+     },
+     "streamSettings": {
+       "network": "tcp",
+       "security": "reality",
+       "realitySettings": {
+         "fingerprint": "chrome",
+         "serverName": "www.microsoft.com",
+         "publicKey": "new-public-key",
+         "shortId": "new-short-id",
+         "spiderX": ""
+       }
+     }
+   }
+   ```
+
+2. Также обновить IP в routing правилах (секция `routing.rules`), найти правило с комментарием `"_comment": "Exclude VLESS server IP"`:
+   ```json
+   {
+     "type": "field",
+     "ip": ["1.2.3.4"],
+     "outboundTag": "direct"
+   }
+   ```
+
+3. Применить изменения (**без пересоздания edge VM**):
+   ```bash
+   cd environments/dev
+   terraform apply
+   ```
+
+   Terraform автоматически обновит конфиг и перезапустит Xray.
+
+4. **Дополнительно:** если изменился IP VLESS сервера, нужно обновить iptables правило:
+   ```bash
+   ssh jump@<edge-ip>
+   # Удалить старое правило
+   sudo iptables -t mangle -D XRAY -d <old-vless-ip> -j RETURN
+   # Добавить новое
+   sudo iptables -t mangle -I XRAY 5 -d <new-vless-ip> -j RETURN
+   # Сохранить
+   sudo netfilter-persistent save
+   ```
+
+#### Отключение TPROXY (только NAT)
+
+Если нужно временно отключить прозрачное проксирование:
+
+```bash
+# На edge VM
+sudo iptables -t mangle -D PREROUTING -s 10.20.0.0/24 -j XRAY
+sudo systemctl stop xray
+```
+
+Трафик будет идти напрямую через NAT (MASQUERADE).
+
+Для включения обратно:
+```bash
+sudo systemctl start xray
+sudo iptables -t mangle -A PREROUTING -s 10.20.0.0/24 -j XRAY
+```
+
+#### Диагностика Xray
+
+```bash
+# Проверить статус Xray
+sudo systemctl status xray
+
+# Смотреть логи в реальном времени
+sudo journalctl -u xray -f
+
+# Проверить access log (какой трафик обрабатывается)
+sudo tail -f /var/log/xray/access.log
+
+# Проверить error log
+sudo cat /var/log/xray/error.log
+
+# Проверить конфигурацию (валидность JSON)
+/usr/local/bin/xray run -test -config /opt/xray/config.json
+```
+
+### Диагностика инфраструктуры
+
+#### VM не имеет доступа в интернет
+
+1. Проверить маршрут:
+   ```bash
+   ip route | grep default
+   ```
+
+2. Проверить NAT на edge:
+   ```bash
+   # На edge VM
+   sudo iptables -t nat -L -n -v | grep MASQUERADE
+   ```
+
+3. Проверить security group
+
+#### Не работает SSH через jump-host
+
+1. Проверить доступ к bastion:
+   ```bash
+   ssh -v jump@bastion.camp.aitalenthub.ru
+   ```
+
+2. Проверить ключи:
+   ```bash
+   ssh-add -l
+   ls -la ~/.ssh/ai-camp/
+   ```
+
+3. Проверить AllowTcpForwarding на edge:
+   ```bash
+   # На edge VM
+   grep AllowTcpForwarding /etc/ssh/sshd_config.d/*
+   ```
+
+#### TPROXY не работает
+
+1. Проверить Xray сервис запущен:
+   ```bash
+   # На edge VM
+   sudo systemctl status xray
+   sudo journalctl -u xray -f
+   ```
+
+2. Проверить iptables правила:
+   ```bash
+   # На edge VM
+   sudo iptables -t mangle -L PREROUTING -n -v
+   sudo iptables -t mangle -L XRAY -n -v
+   ```
+
+3. Проверить policy routing:
+   ```bash
+   # На edge VM
+   ip rule show
+   ip route show table 100
+   ```
+
+4. Проверить, что VLESS server IP исключён:
+   ```bash
+   # На edge VM
+   sudo iptables -t mangle -L XRAY -n -v | grep <vless-server-ip>
+   ```
+
+5. Проверить логи Xray:
+   ```bash
+   # На edge VM
+   cat /var/log/xray/error.log
+   cat /var/log/xray/access.log
+   ```
 
 ---
 

@@ -1,4 +1,4 @@
-# AI Camp Infrastructure
+# AI Talent Camp Infrastructure
 
 > Terraform-инфраструктура для AI-Camp хакатона в Yandex Cloud  
 > **Версия:** 2.0.0 | **Статус:** Production Ready
@@ -18,43 +18,104 @@
 
 ## Архитектура
 
+### Для команд
+
+Простая схема для участников:
+
 ```mermaid
-flowchart TB
-    subgraph internet [Internet]
-        Users[Users/Teams]
-        AI_APIs[AI APIs]
-    end
+flowchart LR
+    Internet((Internet))
+    You[Вы / IDE]
+    VM[Ваша Team VM<br/>4 vCPU, 8GB RAM, 65GB SSD]
     
-    subgraph yc [Yandex Cloud VPC]
-        subgraph public [Public Subnet]
-            Edge[Edge/NAT VM<br/>Traefik Docker + Xray systemd]
-        end
-        
-        subgraph private [Private Subnet]
-            Team1[Team01 VM]
-            Team2[Team02 VM]
-            TeamN[TeamN VM]
-        end
-    end
-    
-    Users -->|SSH/HTTPS| Edge
-    Edge -->|SSH Jump| Team1
-    Edge -->|Traefik Proxy| Team1
-    Team1 -->|NAT + TPROXY| Edge
-    Edge -->|Proxy| AI_APIs
+    You -->|SSH| VM
+    You -->|HTTPS| VM
+    VM -->|Интернет<br/>AI APIs| Internet
 ```
 
-Подробнее см. [docs/architecture.md](docs/architecture.md)
+**Что у вас есть:**
+- Выделенная виртуальная машина Ubuntu 22.04
+- SSH доступ через центральную точку входа (прозрачно настроен)
+- Полный root доступ (через sudo)
+- Доменное имя для вашего приложения
+- Доступ в интернет и к AI API
+
+### Для администраторов
+
+Детальная архитектура всей инфраструктуры см. в [docs/architecture.md](docs/architecture.md)
 
 ## Быстрый старт
 
 ### Для команд участников
 
-Если вы получили доступ к team VM:
+Вы получаете выделенную виртуальную машину в облаке с полным доступом.
 
-1. Следуйте инструкциям в [docs/quickstart.md](docs/quickstart.md)
-2. Используйте готовые SSH ключи из `secrets/team-XX/`
-3. Подключайтесь через ProxyJump: `ssh -F ~/.ssh/ai-camp/ssh-config teamXX`
+**Что вам нужно сделать:**
+
+1. **Подключиться к VM** - см. [docs/quickstart.md](docs/quickstart.md)
+   - SSH подключение через терминал
+   - Подключение через VSCode/Cursor
+   - Используйте готовые SSH ключи из папки `team-XX/`
+
+2. **Настроить окружение** - см. [docs/user-guide.md](docs/user-guide.md)
+   - Установить Docker и Docker Compose
+   - Настроить Nginx как reverse proxy
+   - Получить SSL сертификаты
+
+3. **Развернуть приложение**
+   - Запустить ваше приложение
+   - Настроить доменное имя
+   - Настроить CI/CD для автоматического деплоя
+
+**Ваш домен:** `teamXX.camp.aitalenthub.com` (можно изменить, см. ниже)
+
+## Работа с доменами
+
+### Стандартный домен
+
+Каждая команда получает поддомен: **`teamXX.camp.aitalenthub.com`**
+
+Где `XX` - номер вашей команды (например, `team01`, `team02`, и т.д.)
+
+### Переименование домена
+
+Вы можете запросить изменение части `teamXX` на своё название:
+
+1. Создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new)
+2. Укажите:
+   - Текущий домен: `teamXX.camp.aitalenthub.com`
+   - Желаемое имя (только латиница, цифры, дефис)
+   - Пример: `team01` → `myteam`
+3. После одобрения получите: `myteam.camp.aitalenthub.com`
+
+**Примечание:** Процесс занимает до 1 рабочего дня.
+
+### Использование собственного домена
+
+Если у вас есть свой домен, вы можете направить его на выданный поддомен:
+
+1. Зайдите в настройки вашего DNS провайдера (Cloudflare, Namecheap, и т.д.)
+2. Создайте CNAME запись:
+   ```
+   Тип: CNAME
+   Имя: app (или любое другое)
+   Значение: teamXX.camp.aitalenthub.com
+   ```
+3. Пример: `app.mydomain.com` → `team01.camp.aitalenthub.com`
+4. На вашей VM получите SSL сертификат для `app.mydomain.com` (см. [user-guide.md](docs/user-guide.md))
+
+**Важно:** Настройка DNS может занять до 48 часов.
+
+## Подключение через IDE
+
+### VSCode
+
+1. Установите расширение **"Remote - SSH"**
+2. Настройте SSH конфиг (см. [quickstart.md](docs/quickstart.md))
+3. Подключитесь: `Cmd/Ctrl+Shift+P` → `Remote-SSH: Connect to Host...` → выберите `teamXX`
+4. Работайте с удаленными файлами как с локальными!
+
+Подробные инструкции см. в [docs/quickstart.md](docs/quickstart.md#подключение-через-vscodecursor)
 
 ### Для администраторов
 
@@ -110,21 +171,19 @@ terraform apply
 
 ## Основные компоненты
 
-### Edge/NAT VM (2 vCPU, 4GB RAM)
+### Для команд
 
-**Сервисы:**
-- **Traefik** - Docker контейнер для HTTP/HTTPS routing
-- **Xray** - systemd сервис для TPROXY
-- **NAT** - iptables для обычного трафика
-- **SSH Bastion** - jump host для команд
+**Team VM** - ваша виртуальная машина:
+- **Ресурсы:** 4 vCPU, 8GB RAM, 65GB SSD
+- **ОС:** Ubuntu 22.04 LTS
+- **Доступ:** SSH (через центральную точку входа)
+- **Права:** Полный sudo доступ
+- **Интернет:** Прямой доступ ко всем сервисам
+- **Домен:** `teamXX.camp.aitalenthub.com`
 
-### Team VM (4 vCPU, 8GB RAM, 65GB SSD)
+### Для администраторов
 
-**Для каждой команды:**
-- Изолированная VM в private network
-- SSH доступ через bastion
-- Полный доступ в интернет (через NAT + TPROXY)
-- Доменное имя: `teamXX.camp.aitalenthub.ru`
+Подробная информация об архитектуре, Edge VM и всех компонентах инфраструктуры доступна в [docs/architecture.md](docs/architecture.md) и [docs/admin-guide.md](docs/admin-guide.md)
 
 ## Структура проекта
 
@@ -176,13 +235,6 @@ ai-talent-camp-2026-infra/
 | Edge VM | 2 | 4GB | 20GB SSD | 1 |
 | Team VM | 4 | 8GB | 65GB SSD | По числу команд |
 
-### Стоимость (примерно)
-
-Для 10 команд:
-- Edge VM: ~1500₽/месяц
-- Team VMs (10x): ~25000₽/месяц
-- **Итого: ~26500₽/месяц**
-
 ## Технологии
 
 - **Infrastructure as Code:** Terraform
@@ -208,23 +260,4 @@ ai-talent-camp-2026-infra/
 
 ### Troubleshooting
 
-При возникновении проблем:
-
-1. Проверьте [docs/troubleshooting.md](docs/troubleshooting.md)
-2. Просмотрите логи (Xray, Traefik, system)
-3. Запустите `./scripts/check-docs.sh` для проверки документации
-4. Создайте issue в репозитории
-
-### Контакты
-
-- **Repository:** https://gitlab.com/aitalenthub-core/ai-talent-camp-2026-infra
-- **Documentation:** [docs/](docs/)
-- **Issues:** GitLab Issues
-
-## Лицензия
-
-Проект для внутреннего использования AI Talent Hub.
-
----
-
-**Версия:** 2.0.0 | **Последнее обновление:** 2026-01-29
+При возникновении проблем проверьте [docs/troubleshooting.md](docs/troubleshooting.md)

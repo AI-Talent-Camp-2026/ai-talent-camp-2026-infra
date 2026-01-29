@@ -1,5 +1,5 @@
 # =============================================================================
-# AI Camp SSH Config for ${team_user}
+# AI Talent Camp SSH Config for ${team_user}
 # =============================================================================
 # Usage:
 #   1. Copy this folder to ~/.ssh/ai-camp/

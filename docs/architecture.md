@@ -1,11 +1,11 @@
-# Архитектура AI Camp Infrastructure
+# Архитектура AI Talent Camp Infrastructure
 
 > **Последнее обновление:** 2026-01-29  
 > **Связанные документы:** [modules.md](modules.md), [admin-guide.md](admin-guide.md)
 
 ## Обзор
 
-AI Camp Infrastructure - это Terraform-проект для развертывания безопасной и управляемой инфраструктуры в Yandex Cloud для проведения AI-хакатона.
+AI Talent Camp Infrastructure - это Terraform-проект для развертывания безопасной и управляемой инфраструктуры в Yandex Cloud для проведения AI-хакатона.
 
 **Ключевые принципы:**
 - ✅ Единая точка входа (Edge/NAT сервер)
@@ -87,9 +87,11 @@ AI Camp Infrastructure - это Terraform-проект для развертыв
 
 #### Traefik (Docker контейнер)
 - **Назначение:** Reverse proxy для HTTP/HTTPS трафика
-- **Режим:** TLS passthrough (не расшифровывает трафик)
+- **Режим:** TLS passthrough для HTTPS (не расшифровывает трафик), прямое проксирование для HTTP
 - **Routing:** По hostname (`team01.camp.aitalenthub.ru` → Team01 VM)
+- **Порты:** 80 (HTTP) и 443 (HTTPS) проксируются на соответствующие порты Team VM
 - **Конфигурация:** `/opt/traefik/traefik.yml`, `/opt/traefik/dynamic/`
+- **Кастомные домены:** Поддерживаются через явное добавление в dynamic конфигурацию
 
 #### Xray (systemd сервис)
 - **Назначение:** Прозрачное проксирование AI API и соцсетей
@@ -223,16 +225,28 @@ flowchart LR
     Traefik -->|7. Response| User
 ```
 
-**Описание:**
+**Описание (HTTPS):**
 1. Пользователь запрашивает DNS для `team01.camp.aitalenthub.ru`
 2. DNS возвращает публичный IP edge VM
 3. Пользователь отправляет HTTPS запрос на edge VM
 4. Traefik принимает запрос на порту 443
 5. Traefik определяет целевую VM по SNI (Server Name Indication)
-6. Traefik проксирует запрос на Team VM (TLS passthrough - без расшифровки)
+6. Traefik проксирует запрос на Team VM:443 (TLS passthrough - без расшифровки)
 7. Ответ возвращается пользователю
 
-**Важно:** SSL-сертификат должен быть на Team VM, Traefik только проксирует.
+**Описание (HTTP):**
+1. Пользователь запрашивает DNS для `team01.camp.aitalenthub.ru`
+2. DNS возвращает публичный IP edge VM
+3. Пользователь отправляет HTTP запрос на edge VM:80
+4. Traefik принимает запрос на порту 80
+5. Traefik определяет целевую VM по Host header
+6. Traefik проксирует запрос на Team VM:80
+7. Ответ возвращается пользователю
+
+**Важно:** 
+- SSL-сертификат должен быть на Team VM, Traefik только проксирует
+- HTTP не редиректится автоматически на HTTPS - это делается на Team VM (например, через Nginx или Certbot)
+- Для кастомных доменов нужно явно добавить правило в Traefik конфигурацию
 
 ### Egress Flow (Outbound Traffic)
 

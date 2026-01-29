@@ -1,5 +1,5 @@
 # =============================================================================
-# AI Camp Infrastructure - Development Environment
+# AI Talent Camp Infrastructure - Development Environment
 # =============================================================================
 
 terraform {

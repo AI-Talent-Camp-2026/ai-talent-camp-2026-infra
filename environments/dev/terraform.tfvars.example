@@ -1,5 +1,5 @@
 # =============================================================================
-# AI Camp Infrastructure - Example Configuration
+# AI Talent Camp Infrastructure - Example Configuration
 # =============================================================================
 # Copy this file to terraform.tfvars and fill in your values
 # DO NOT commit terraform.tfvars to git!

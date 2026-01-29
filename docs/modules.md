@@ -1,4 +1,4 @@
-# Документация модулей AI Camp Infrastructure
+# Документация модулей AI Talent Camp Infrastructure
 
 > **Последнее обновление:** 2026-01-29  
 > **Связанные документы:** [architecture.md](architecture.md), [admin-guide.md](admin-guide.md)
