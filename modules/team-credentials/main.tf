@@ -1,0 +1,139 @@
+# =============================================================================
+# Team Credentials Module
+# =============================================================================
+# This module handles saving SSH keys to files and generating credentials
+# documentation, separate from key generation and infrastructure provisioning.
+# =============================================================================
+
+# =============================================================================
+# Team Directory Structure
+# =============================================================================
+
+resource "local_file" "team_dir_marker" {
+  for_each = var.teams
+
+  filename = "${path.module}/${var.secrets_path}/team-${each.key}/.gitkeep"
+  content  = ""
+}
+
+# =============================================================================
+# Jump Keys (for bastion access)
+# =============================================================================
+
+resource "local_file" "team_jump_private_key" {
+  for_each = var.teams
+
+  filename        = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-jump-key"
+  content         = var.team_jump_private_keys[each.key]
+  file_permission = "0600"
+}
+
+resource "local_file" "team_jump_public_key" {
+  for_each = var.teams
+
+  filename = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-jump-key.pub"
+  content  = var.team_jump_public_keys[each.key]
+}
+
+# =============================================================================
+# VM Keys (for team VM access)
+# =============================================================================
+
+resource "local_file" "team_vm_private_key" {
+  for_each = var.teams
+
+  filename        = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-key"
+  content         = var.team_vm_private_keys[each.key]
+  file_permission = "0600"
+}
+
+resource "local_file" "team_vm_public_key" {
+  for_each = var.teams
+
+  filename = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-key.pub"
+  content  = var.team_vm_public_keys[each.key]
+}
+
+# =============================================================================
+# GitHub Deploy Keys
+# =============================================================================
+
+resource "local_file" "team_github_private_key" {
+  for_each = var.teams
+
+  filename        = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-deploy-key"
+  content         = var.team_github_private_keys[each.key]
+  file_permission = "0600"
+}
+
+resource "local_file" "team_github_public_key" {
+  for_each = var.teams
+
+  filename = "${path.module}/${var.secrets_path}/team-${each.key}/${each.value.user}-deploy-key.pub"
+  content  = var.team_github_public_keys[each.key]
+}
+
+# =============================================================================
+# SSH Config Files
+# =============================================================================
+
+# Track team IP changes with terraform_data for controlled updates
+resource "terraform_data" "team_ip_tracker" {
+  for_each = var.teams
+  
+  input = {
+    team_id     = each.key
+    user        = each.value.user
+    private_ip  = each.value.private_ip
+  }
+}
+
+resource "local_file" "team_ssh_config" {
+  for_each = var.teams
+
+  filename = "${path.module}/${var.secrets_path}/team-${each.key}/ssh-config"
+  content = templatefile("${path.module}/../../templates/team/ssh-config.tpl", {
+    team_user       = each.value.user
+    domain          = var.domain
+    jump_user       = var.jump_user
+    team_private_ip = terraform_data.team_ip_tracker[each.key].output.private_ip
+  })
+
+  depends_on = [terraform_data.team_ip_tracker]
+}
+
+# =============================================================================
+# Teams Credentials Summary JSON
+# =============================================================================
+
+resource "local_file" "teams_credentials_json" {
+  filename = "${path.module}/${var.secrets_path}/teams-credentials.json"
+  content = jsonencode({
+    bastion = {
+      host   = var.bastion_ip
+      user   = var.jump_user
+      domain = "bastion.${var.domain}"
+    }
+    teams = {
+      for team_id, team_config in var.teams :
+      team_id => {
+        user        = team_config.user
+        private_ip  = team_config.private_ip
+        domain      = "${team_config.user}.${var.domain}"
+        ssh_command = "ssh -F ~/.ssh/ai-camp/ssh-config ${team_config.user}"
+        folder      = "secrets/team-${team_id}/"
+        files = {
+          jump_key   = "${team_config.user}-jump-key"
+          vm_key     = "${team_config.user}-key"
+          github_key = "${team_config.user}-deploy-key"
+          ssh_config = "ssh-config"
+        }
+      }
+    }
+    traefik = {
+      auto_config   = "secrets/traefik-dynamic-auto.yml"
+      custom_config = "secrets/traefik-dynamic-custom.yml"
+      note          = "auto_config is regenerated by Terraform, custom_config is for manual additions"
+    }
+  })
+}

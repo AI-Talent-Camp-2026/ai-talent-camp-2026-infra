@@ -36,29 +36,6 @@ provider "yandex" {
 }
 
 # =============================================================================
-# SSH Keys Generation for Teams
-# =============================================================================
-# Keys are generated early to break circular dependency with edge VM
-
-# Jump keys (for bastion access) - unique per team
-resource "tls_private_key" "team_jump_key" {
-  for_each  = var.teams
-  algorithm = "ED25519"
-}
-
-# VM keys (for team VM access)
-resource "tls_private_key" "team_vm_key" {
-  for_each  = var.teams
-  algorithm = "ED25519"
-}
-
-# GitHub deploy keys (for CI/CD)
-resource "tls_private_key" "team_github_key" {
-  for_each  = var.teams
-  algorithm = "ED25519"
-}
-
-# =============================================================================
 # Local Variables
 # =============================================================================
 
@@ -78,9 +55,6 @@ locals {
     vless_public_key  = var.vless_public_key
     vless_short_id    = var.vless_short_id
   })
-
-  # Collect all team jump public keys for bastion authorized_keys
-  team_jump_public_keys = [for key in tls_private_key.team_jump_key : key.public_key_openssh]
 }
 
 # =============================================================================
@@ -118,7 +92,7 @@ module "network_base" {
   zone                  = var.zone
   public_cidr           = var.public_cidr
   private_cidr          = var.private_cidr
-  create_private_subnet = false # Created separately with route table
+  create_private_subnet = false  # Created separately with route table
   route_table_id        = null
 }
 
@@ -154,7 +128,7 @@ module "edge" {
   private_subnet_cidr = var.private_cidr
   jump_user           = var.jump_user
   jump_public_key     = var.jump_public_key
-  team_jump_keys      = local.team_jump_public_keys
+  team_jump_keys      = module.team_credentials.team_jump_public_keys_list
   vless_server_ip     = var.vless_server_ip
   traefik_config      = local.traefik_config
   xray_config         = local.xray_config
@@ -207,12 +181,12 @@ module "team_vm" {
   private_subnet_id = yandex_vpc_subnet.private_with_nat.id
   team_sg_id        = module.security.team_sg_id
   team_user         = each.value.user
-  # Use generated VM key, plus any additional keys from config
-  public_keys = concat(
-    [tls_private_key.team_vm_key[each.key].public_key_openssh],
+  # Use generated VM key from team_credentials module, plus any additional keys from config
+  public_keys       = concat(
+    [module.team_credentials.team_vm_public_keys[each.key]],
     each.value.public_keys
   )
-  domain = var.domain
+  domain            = var.domain
 
   depends_on = [yandex_vpc_subnet.private_with_nat]
 }

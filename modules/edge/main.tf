@@ -53,4 +53,10 @@ resource "yandex_compute_instance" "edge" {
   }
 
   allow_stopping_for_update = true
+
+  lifecycle {
+    ignore_changes = [
+      boot_disk[0].initialize_params[0].image_id
+    ]
+  }
 }

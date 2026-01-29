@@ -152,7 +152,7 @@ variable "teams" {
   description = "Map of teams with their configuration. SSH keys are auto-generated for each team."
   type = map(object({
     user        = string
-    public_keys = list(string)  # Additional keys (optional)
+    public_keys = list(string) # Additional keys (optional)
   }))
   default = {}
 }
