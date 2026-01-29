@@ -16,38 +16,69 @@ Terraform-инфраструктура для AI-Camp хакатона в Yandex
 
 ```
                     Internet
-                        │
                         ▼
               ┌───────────────────────┐
               │      DNS Records      │
               │ *.camp.aitalenthub.ru │
               └────────┬──────────────┘
-                       │
                        ▼
 ┌──────────────────────────────────────────────────────┐
 │                   Yandex Cloud VPC                   │
 │  ┌────────────────────────────────────────────────┐  │
-│  │              Public Subnet (10.0.1.0/24)       │  │
+│  │              Public Subnet (192.168.1.0/24)    │  │
 │  │  ┌──────────────────────────────────────────┐  │  │
 │  │  │            Edge/NAT VM                   │  │  │
-│  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │  │  │
-│  │  │  │ Traefik │  │  Xray   │  │   NAT   │  │  │  │
-│  │  │  │         │  │ TPROXY  │  │         │  │  │  │
-│  │  │  └─────────┘  └─────────┘  └─────────┘  │  │  │
+│  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐   │  │  │
+│  │  │  │ Traefik │  │  Xray   │  │   NAT   │   │  │  │
+│  │  │  │         │  │ TPROXY  │  │         │   │  │  │
+│  │  │  └─────────┘  └─────────┘  └─────────┘   │  │  │
 │  │  └──────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────┘  │
-│                          │                           │
 │                          │ NAT + TPROXY              │
 │                          ▼                           │
 │  ┌────────────────────────────────────────────────┐  │
-│  │             Private Subnet (10.0.2.0/24)       │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐     │  │
-│  │  │ Team01   │  │ Team02   │  │ Team...  │     │  │
-│  │  │   VM     │  │   VM     │  │   VM     │     │  │
-│  │  │(4vCPU/8G)│  │(4vCPU/8G)│  │(4vCPU/8G)│     │  │
-│  │  └──────────┘  └──────────┘  └──────────┘     │  │
+│  │             Private Subnet (10.20.0.0/24)      │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐      │  │
+│  │  │ Team01   │  │ Team02   │  │ Team...  │      │  │
+│  │  │   VM     │  │   VM     │  │   VM     │      │  │
+│  │  │(4vCPU/8G)│  │(4vCPU/8G)│  │(4vCPU/8G)│      │  │
+│  │  └──────────┘  └──────────┘  └──────────┘      │  │
 │  └────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
+```
+
+
+```mermaid
+flowchart TB
+    subgraph internet [Internet]
+        DNS["*.camp.aitalenthub.ru"]
+        Users[Users/Teams]
+        AI_APIs[AI APIs<br/>OpenAI/Anthropic]
+    end
+    
+    subgraph yc [Yandex Cloud VPC]
+        subgraph public_subnet [Public Subnet]
+            Edge[Edge/NAT VM<br/>Traefik + Xray]
+        end
+        
+        subgraph private_subnet [Private Subnet]
+            Team1[Team01 VM]
+            Team2[Team02 VM]
+            TeamN[TeamN VM]
+        end
+    end
+    
+    DNS --> Edge
+    Users --> Edge
+    Edge -->|SSH Jump| Team1
+    Edge -->|SSH Jump| Team2
+    Edge -->|SSH Jump| TeamN
+    Edge -->|Traefik Proxy| Team1
+    Edge -->|Traefik Proxy| Team2
+    Team1 -->|NAT + Xray| Edge
+    Team2 -->|NAT + Xray| Edge
+    TeamN -->|NAT + Xray| Edge
+    Edge -->|VLESS Proxy| AI_APIs
 ```
 
 ## Prerequisites
