@@ -1,5 +1,8 @@
 # Документация модулей AI Camp Infrastructure
 
+> **Последнее обновление:** 2026-01-29  
+> **Связанные документы:** [architecture.md](architecture.md), [admin-guide.md](admin-guide.md)
+
 ## Обзор
 
 Инфраструктура состоит из следующих Terraform модулей:
@@ -161,11 +164,13 @@ module "network" {
 
 ### Компоненты (устанавливаются через cloud-init)
 
-- Docker + Docker Compose
-- Traefik (reverse proxy с TLS passthrough)
-- Xray (transparent proxy через TPROXY для AI API)
-- NAT (iptables masquerade)
-- TPROXY (iptables mangle + policy routing)
+- **Docker + Docker Compose** - контейнеризация для Traefik
+- **Traefik** (Docker контейнер) - reverse proxy с TLS passthrough
+- **Xray** (systemd сервис) - transparent proxy через TPROXY для AI API
+- **NAT** (iptables masquerade) - маршрутизация исходящего трафика
+- **TPROXY** (iptables mangle + policy routing) - прозрачное проксирование
+
+**Важно:** Traefik работает как Docker контейнер, а Xray как нативный systemd сервис для поддержки TPROXY с `IP_TRANSPARENT` socket option.
 
 ### TPROXY настройки
 
@@ -302,6 +307,145 @@ module "team_vm" {
 
 ---
 
+## Module: team-credentials
+
+### Назначение
+
+Управляет SSH ключами команд и генерирует credentials файлы.
+
+### Ресурсы
+
+- `local_file.team_jump_private_key` - приватный ключ для bastion
+- `local_file.team_vm_private_key` - приватный ключ для VM
+- `local_file.team_github_private_key` - приватный ключ для GitHub/CI
+- `local_file.team_ssh_config` - готовый SSH конфиг
+- `local_file.teams_credentials_json` - сводка всех команд в JSON
+
+### Входные переменные
+
+| Переменная | Тип | Описание |
+|------------|-----|----------|
+| `teams` | map(object) | Конфигурация команд |
+| `bastion_host` | string | Hostname bastion сервера |
+| `team_jump_private_keys` | map(string) | Приватные ключи для bastion |
+| `team_vm_private_keys` | map(string) | Приватные ключи для VM |
+| `team_github_private_keys` | map(string) | Приватные ключи для GitHub |
+
+### Outputs
+
+| Output | Описание |
+|--------|----------|
+| `credentials_folders` | Пути к папкам с credentials |
+
+### Генерируемые файлы
+
+Для каждой команды создаётся папка `secrets/team-XX/` с файлами:
+
+```
+secrets/team-01/
+├── team01-jump-key          # Приватный ключ для bastion
+├── team01-jump-key.pub      # Публичный ключ для bastion  
+├── team01-key               # Приватный ключ для VM
+├── team01-key.pub           # Публичный ключ для VM
+├── team01-deploy-key        # Приватный ключ для GitHub
+├── team01-deploy-key.pub    # Публичный ключ для GitHub
+└── ssh-config               # Готовый SSH конфиг
+```
+
+### Пример использования
+
+```hcl
+module "team_credentials" {
+  source = "../../modules/team-credentials"
+
+  teams                     = var.teams
+  bastion_host              = var.bastion_host
+  team_jump_private_keys    = { for k, v in tls_private_key.team_jump_key : k => v.private_key_openssh }
+  team_jump_public_keys     = { for k, v in tls_private_key.team_jump_key : k => v.public_key_openssh }
+  team_vm_private_keys      = { for k, v in tls_private_key.team_vm_key : k => v.private_key_openssh }
+  team_vm_public_keys       = { for k, v in tls_private_key.team_vm_key : k => v.public_key_openssh }
+  team_github_private_keys  = { for k, v in tls_private_key.team_github_key : k => v.private_key_openssh }
+  team_github_public_keys   = { for k, v in tls_private_key.team_github_key : k => v.public_key_openssh }
+}
+```
+
+**Преимущества:**
+- Изолированное управление credentials
+- Независимые обновления без влияния на инфраструктуру
+- Автоматическая генерация SSH конфигов
+
+---
+
+## Module: config-sync
+
+### Назначение
+
+Синхронизирует конфигурационные файлы на серверы.
+
+### Ресурсы
+
+- `local_file.traefik_dynamic_config` - динамическая конфигурация Traefik
+- `null_resource.sync_xray_config` - синхронизация Xray конфига
+- `null_resource.sync_traefik_configs` - синхронизация Traefik конфигов
+- `null_resource.sync_team_jump_keys` - синхронизация jump ключей
+
+### Входные переменные
+
+| Переменная | Тип | Описание |
+|------------|-----|----------|
+| `edge_public_ip` | string | Публичный IP edge VM |
+| `jump_private_key_path` | string | Путь к приватному ключу jump |
+| `teams` | map(object) | Конфигурация команд |
+| `xray_config_path` | string | Путь к xray-config.json |
+| `traefik_config` | string | Содержимое traefik.yml |
+
+### Outputs
+
+Модуль не имеет outputs.
+
+### Процесс синхронизации
+
+1. **Xray конфигурация:**
+   - Копирует `secrets/xray-config.json` на edge VM
+   - Перезапускает Xray сервис
+   - Проверяет статус после перезапуска
+
+2. **Traefik конфигурация:**
+   - Генерирует динамическую конфигурацию для teams
+   - Копирует статическую и динамическую конфигурации
+   - Traefik автоматически подхватывает изменения
+
+3. **Jump ключи:**
+   - Синхронизирует публичные ключи команд на bastion
+   - Обновляет `~jump/.ssh/authorized_keys`
+
+### Пример использования
+
+```hcl
+module "config_sync" {
+  source = "../../modules/config-sync"
+
+  edge_public_ip          = module.edge.edge_public_ip
+  jump_private_key_path   = var.jump_private_key_path
+  teams                   = var.teams
+  xray_config_path        = local.xray_config_path
+  traefik_config          = local.traefik_config
+  
+  depends_on = [
+    module.edge,
+    module.team_vm
+  ]
+}
+```
+
+**Преимущества:**
+- Четкое разделение: создание инфраструктуры vs обновление конфигов
+- Можно обновлять конфиги без изменения VM
+- Легче отлаживать проблемы синхронизации
+- Автоматический перезапуск сервисов после изменений
+
+---
+
 ## Диаграмма зависимостей
 
 ```
@@ -310,7 +454,13 @@ network ──┬──> security ──┬──> edge ──> routing
           │               └──────────────┼──> team_vm
           │                              │
           └──────────────────────────────┘
+                                         │
+                                         ├──> team-credentials
+                                         │
+                                         └──> config-sync
 ```
+
+**Важно:** Модули `team-credentials` и `config-sync` не создают cloud ресурсы, они управляют только локальными файлами и синхронизацией.
 
 ## Порядок создания ресурсов
 

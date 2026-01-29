@@ -1,4 +1,7 @@
 # Руководство пользователя AI Camp Infrastructure
+ 
+> **Последнее обновление:** 2026-01-29  
+> **Связанные документы:** [quickstart.md](quickstart.md), [xray-configuration.md](xray-configuration.md), [troubleshooting.md](troubleshooting.md)
 
 ## Содержание
 
