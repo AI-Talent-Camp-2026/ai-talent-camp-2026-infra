@@ -1,7 +1,6 @@
 # AI Talent Camp Infrastructure
 
-> Terraform-инфраструктура для AI-Camp хакатона в Yandex Cloud  
-> **Версия:** 2.0.0 | **Статус:** Production Ready
+> Terraform-инфраструктура для AI Talent Camp
 
 ## Что это
 
