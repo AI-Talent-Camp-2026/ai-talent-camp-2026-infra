@@ -56,15 +56,13 @@ resource "local_file" "traefik_dynamic_custom" {
 }
 
 # =============================================================================
-# Sync Team Jump Keys to Bastion
+# Sync Team Jump Keys with Restrictions to Bastion
 # =============================================================================
 
-resource "null_resource" "sync_team_jump_key_to_bastion" {
-  for_each = var.team_jump_keys
-
+resource "null_resource" "sync_restricted_authorized_keys" {
   triggers = {
-    jump_key_fingerprint = md5(each.value)
-    bastion_ip           = var.edge_public_ip
+    keys_hash  = md5(jsonencode(var.team_jump_keys))
+    bastion_ip = var.edge_public_ip
   }
 
   connection {
@@ -74,9 +72,23 @@ resource "null_resource" "sync_team_jump_key_to_bastion" {
     host        = var.edge_public_ip
   }
 
+  # Generate restricted authorized_keys file
+  provisioner "file" {
+    content = join("\n", [
+      for team_id, team_data in var.team_jump_keys :
+      "command=\"/bin/false\",no-pty,no-X11-forwarding,no-agent-forwarding,permitopen=\"${team_data.vm_ip}:22\" ${trimspace(team_data.public_key)}"
+    ])
+    destination = "/tmp/authorized_keys_restricted"
+  }
+
+  # Install restricted keys file
   provisioner "remote-exec" {
     inline = [
-      "grep -qF '${trimspace(each.value)}' ~/.ssh/authorized_keys || echo '${trimspace(each.value)}' >> ~/.ssh/authorized_keys"
+      "mkdir -p ~/.ssh",
+      "chmod 700 ~/.ssh",
+      "mv /tmp/authorized_keys_restricted ~/.ssh/authorized_keys_restricted",
+      "chmod 600 ~/.ssh/authorized_keys_restricted",
+      "echo 'Restricted team jump keys updated (${length(var.team_jump_keys)} teams)'"
     ]
   }
 }

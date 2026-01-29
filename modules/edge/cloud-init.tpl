@@ -27,9 +27,6 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     ssh_authorized_keys:
       - ${jump_public_key}
-%{ for key in team_jump_keys ~}
-      - ${key}
-%{ endfor ~}
 
 # =============================================================================
 # File Configuration
@@ -96,6 +93,7 @@ write_files:
       X11Forwarding no
       PasswordAuthentication no
       PubkeyAuthentication yes
+      AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys_restricted
 
   # Xray systemd service (native binary for TPROXY IP_TRANSPARENT support)
   - path: /etc/systemd/system/xray.service

@@ -26,8 +26,11 @@ variable "teams" {
 }
 
 variable "team_jump_keys" {
-  description = "Map of team jump public keys (team_id => public_key)"
-  type        = map(string)
+  description = "Map of team jump keys with their VM IPs for restricted access"
+  type = map(object({
+    public_key = string
+    vm_ip      = string
+  }))
 }
 
 variable "domain" {

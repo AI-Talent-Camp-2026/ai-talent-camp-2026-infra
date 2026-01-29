@@ -78,9 +78,6 @@ locals {
     vless_public_key  = var.vless_public_key
     vless_short_id    = var.vless_short_id
   })
-
-  # Collect all team jump public keys for bastion authorized_keys
-  team_jump_public_keys = [for key in tls_private_key.team_jump_key : key.public_key_openssh]
 }
 
 # =============================================================================
@@ -154,7 +151,6 @@ module "edge" {
   private_subnet_cidr = var.private_cidr
   jump_user           = var.jump_user
   jump_public_key     = var.jump_public_key
-  team_jump_keys      = local.team_jump_public_keys
   vless_server_ip     = var.vless_server_ip
   traefik_config      = local.traefik_config
   xray_config         = local.xray_config

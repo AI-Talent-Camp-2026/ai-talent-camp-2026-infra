@@ -20,7 +20,13 @@ module "config_sync" {
     }
   }
 
-  team_jump_keys = { for k, v in tls_private_key.team_jump_key : k => v.public_key_openssh }
+  team_jump_keys = {
+    for team_id, team_config in var.teams :
+    team_id => {
+      public_key = tls_private_key.team_jump_key[team_id].public_key_openssh
+      vm_ip      = module.team_vm[team_id].private_ip
+    }
+  }
 
   domain      = var.domain
   xray_config = local.xray_config

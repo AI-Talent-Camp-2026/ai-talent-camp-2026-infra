@@ -70,12 +70,6 @@ variable "jump_public_key" {
   type        = string
 }
 
-variable "team_jump_keys" {
-  description = "List of SSH public keys for team access to jump host"
-  type        = list(string)
-  default     = []
-}
-
 variable "vless_server_ip" {
   description = "VLESS server IP address (excluded from TPROXY to avoid loop)"
   type        = string
