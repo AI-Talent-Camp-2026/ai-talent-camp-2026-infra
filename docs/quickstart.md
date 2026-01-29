@@ -182,7 +182,7 @@ df -h
 
 ### Стандартный домен
 
-Ваш домен: **`teamXX.camp.aitalenthub.com`**
+Ваш домен: **`teamXX.camp.aitalenthub.ru`**
 
 Где `XX` - номер вашей команды (например, `team01`, `team02`).
 
@@ -192,7 +192,7 @@ df -h
 
 1. Создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new)
 2. Укажите текущий домен и желаемое имя
-3. Пример: `team01.camp.aitalenthub.com` → `myteam.camp.aitalenthub.com`
+3. Пример: `team01.camp.aitalenthub.ru` → `myteam.camp.aitalenthub.ru`
 4. Администратор обновит конфигурацию
 
 **Требования к имени:**
@@ -209,7 +209,7 @@ df -h
 ```
 Тип:     CNAME
 Имя:     app (или любое другое)
-Значение: team01.camp.aitalenthub.com
+Значение: team01.camp.aitalenthub.ru
 TTL:     Auto или 300
 ```
 
@@ -217,7 +217,7 @@ TTL:     Auto или 300
 
 ```bash
 dig app.mydomain.com
-# Должна быть CNAME запись на team01.camp.aitalenthub.com
+# Должна быть CNAME запись на team01.camp.aitalenthub.ru
 ```
 
 **3. Настройте SSL на вашей VM:**

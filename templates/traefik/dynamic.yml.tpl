@@ -11,8 +11,8 @@
 # 5. User obtains SSL certificate for the domain
 #
 # Example for custom domain:
-#   Change: rule: "HostSNI(`team01.camp.aitalenthub.com`)"
-#   To:     rule: "HostSNI(`team01.camp.aitalenthub.com`) || HostSNI(`app.mydomain.com`)"
+#   Change: rule: "HostSNI(`team01.camp.aitalenthub.ru`)"
+#   To:     rule: "HostSNI(`team01.camp.aitalenthub.ru`) || HostSNI(`app.mydomain.com`)"
 # =============================================================================
 
 # TCP Routers for TLS Passthrough

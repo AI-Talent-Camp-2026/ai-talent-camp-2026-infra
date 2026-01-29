@@ -66,13 +66,13 @@ flowchart LR
    - Настроить доменное имя
    - Настроить CI/CD для автоматического деплоя
 
-**Ваш домен:** `teamXX.camp.aitalenthub.com` (можно изменить, см. ниже)
+**Ваш домен:** `teamXX.camp.aitalenthub.ru` (можно изменить, см. ниже)
 
 ## Работа с доменами
 
 ### Стандартный домен
 
-Каждая команда получает поддомен: **`teamXX.camp.aitalenthub.com`**
+Каждая команда получает поддомен: **`teamXX.camp.aitalenthub.ru`**
 
 Где `XX` - номер вашей команды (например, `team01`, `team02`, и т.д.)
 
@@ -82,10 +82,10 @@ flowchart LR
 
 1. Создайте [issue в репозитории](https://github.com/AI-Talent-Camp-2026/ai-talent-camp-2026-infra/issues/new)
 2. Укажите:
-   - Текущий домен: `teamXX.camp.aitalenthub.com`
+   - Текущий домен: `teamXX.camp.aitalenthub.ru`
    - Желаемое имя (только латиница, цифры, дефис)
    - Пример: `team01` → `myteam`
-3. После одобрения получите: `myteam.camp.aitalenthub.com`
+3. После одобрения получите: `myteam.camp.aitalenthub.ru`
 
 **Примечание:** Процесс занимает до 1 рабочего дня.
 
@@ -98,9 +98,9 @@ flowchart LR
    ```
    Тип: CNAME
    Имя: app (или любое другое)
-   Значение: teamXX.camp.aitalenthub.com
+   Значение: teamXX.camp.aitalenthub.ru
    ```
-3. Пример: `app.mydomain.com` → `team01.camp.aitalenthub.com`
+3. Пример: `app.mydomain.com` → `team01.camp.aitalenthub.ru`
 4. На вашей VM получите SSL сертификат для `app.mydomain.com` (см. [user-guide.md](docs/user-guide.md))
 
 **Важно:** Настройка DNS может занять до 48 часов.
@@ -178,7 +178,7 @@ terraform apply
 - **Доступ:** SSH (через центральную точку входа)
 - **Права:** Полный sudo доступ
 - **Интернет:** Прямой доступ ко всем сервисам
-- **Домен:** `teamXX.camp.aitalenthub.com`
+- **Домен:** `teamXX.camp.aitalenthub.ru`
 
 ### Для администраторов
 

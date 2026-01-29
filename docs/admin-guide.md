@@ -463,7 +463,7 @@ tcp:
       entryPoints:
         - websecure
       # Добавить кастомный домен через ||
-      rule: "HostSNI(`team01.camp.aitalenthub.com`) || HostSNI(`app.mydomain.com`)"
+      rule: "HostSNI(`team01.camp.aitalenthub.ru`) || HostSNI(`app.mydomain.com`)"
       service: team01-service
       tls:
         passthrough: true
@@ -477,7 +477,7 @@ http:
       entryPoints:
         - web
       # Добавить кастомный домен через ||
-      rule: "Host(`team01.camp.aitalenthub.com`) || Host(`app.mydomain.com`)"
+      rule: "Host(`team01.camp.aitalenthub.ru`) || Host(`app.mydomain.com`)"
       service: team01-http-service
 ```
 
@@ -485,7 +485,7 @@ http:
 
 ```bash
 # SSH на edge VM
-ssh jump@bastion.camp.aitalenthub.com
+ssh jump@bastion.camp.aitalenthub.ru
 
 # Перезапустить Traefik (конфиг перечитается автоматически)
 docker restart traefik

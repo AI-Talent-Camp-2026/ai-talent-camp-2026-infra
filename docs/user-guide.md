@@ -13,7 +13,7 @@
 - 4 vCPU, 8GB RAM, 65GB SSD
 - Полный sudo доступ
 - Доступ в интернет (включая AI API)
-- Доменное имя `teamXX.camp.aitalenthub.com`
+- Доменное имя `teamXX.camp.aitalenthub.ru`
 - SSH доступ через центральную точку входа
 
 **Что вам нужно сделать:**
@@ -173,7 +173,7 @@ sudo nano /etc/nginx/sites-available/myapp
 ```nginx
 server {
     listen 80;
-    server_name team01.camp.aitalenthub.com;
+    server_name team01.camp.aitalenthub.ru;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -214,7 +214,7 @@ Let's Encrypt предоставляет бесплатные SSL сертифи
 sudo apt install -y certbot python3-certbot-nginx
 
 # Получить сертификат
-sudo certbot --nginx -d team01.camp.aitalenthub.com
+sudo certbot --nginx -d team01.camp.aitalenthub.ru
 
 # Следуйте инструкциям:
 # 1. Введите email
@@ -243,7 +243,7 @@ sudo certbot renew --dry-run
 
 ### Ваш стандартный домен
 
-Вы получаете: **`teamXX.camp.aitalenthub.com`**
+Вы получаете: **`teamXX.camp.aitalenthub.ru`**
 
 Где `XX` - номер команды (01, 02, и т.д.)
 
@@ -257,9 +257,9 @@ sudo certbot renew --dry-run
 2. Заголовок: `Запрос на изменение домена для teamXX`
 3. Укажите:
    ```
-   Текущий домен: team01.camp.aitalenthub.com
+   Текущий домен: team01.camp.aitalenthub.ru
    Желаемое имя: myteam (только латиница, цифры, дефис)
-   Новый домен: myteam.camp.aitalenthub.com
+   Новый домен: myteam.camp.aitalenthub.ru
    ```
 4. Администратор обновит конфигурацию (обычно 1 рабочий день)
 5. После одобрения обновите настройки на вашей VM
@@ -277,7 +277,7 @@ sudo nano /etc/nginx/sites-available/myapp
 # Изменить server_name на новый домен
 
 # 2. Получить новый SSL сертификат
-sudo certbot --nginx -d myteam.camp.aitalenthub.com
+sudo certbot --nginx -d myteam.camp.aitalenthub.ru
 
 # 3. Перезагрузить Nginx
 sudo systemctl reload nginx
@@ -309,13 +309,13 @@ sudo systemctl reload nginx
 ```
 Тип: CNAME
 Имя: app (или любое другое: www, api, и т.д.)
-Значение: team01.camp.aitalenthub.com
+Значение: team01.camp.aitalenthub.ru
 TTL: Auto или 300
 ```
 
 **Пример:**
 ```
-app.mydomain.com → team01.camp.aitalenthub.com (CNAME)
+app.mydomain.com → team01.camp.aitalenthub.ru (CNAME)
 ```
 
 **Шаг 3: Проверка DNS (может занять до 48 часов)**
@@ -325,8 +325,8 @@ app.mydomain.com → team01.camp.aitalenthub.com (CNAME)
 dig app.mydomain.com
 
 # Должно быть (для CNAME):
-# app.mydomain.com. 300 IN CNAME team01.camp.aitalenthub.com.
-# team01.camp.aitalenthub.com. 300 IN A <IP edge VM>
+# app.mydomain.com. 300 IN CNAME team01.camp.aitalenthub.ru.
+# team01.camp.aitalenthub.ru. 300 IN A <IP edge VM>
 
 # Для A-записи:
 # app.mydomain.com. 300 IN A <IP edge VM>
@@ -345,7 +345,7 @@ sudo nano /etc/nginx/sites-available/myapp
 ```nginx
 server {
     listen 80;
-    server_name team01.camp.aitalenthub.com app.mydomain.com;
+    server_name team01.camp.aitalenthub.ru app.mydomain.com;
     # ... остальная конфигурация
 }
 ```
@@ -357,12 +357,12 @@ server {
 sudo certbot --nginx -d app.mydomain.com
 
 # Или для обоих доменов сразу
-sudo certbot --nginx -d team01.camp.aitalenthub.com -d app.mydomain.com
+sudo certbot --nginx -d team01.camp.aitalenthub.ru -d app.mydomain.com
 ```
 
 **Важно:** 
 - ⚠️ Без добавления домена в конфигурацию Traefik (Шаг 1), ваш кастомный домен не будет работать
-- ✅ Стандартный домен `teamXX.camp.aitalenthub.com` работает сразу без дополнительных настроек
+- ✅ Стандартный домен `teamXX.camp.aitalenthub.ru` работает сразу без дополнительных настроек
 
 ---
 
@@ -473,7 +473,7 @@ on:
     branches: [ main ]
 
 env:
-  BASTION_HOST: bastion.camp.aitalenthub.com
+  BASTION_HOST: bastion.camp.aitalenthub.ru
   TEAM_VM_IP: 10.20.0.5
   TEAM_USER: team01
 
@@ -694,7 +694,7 @@ ssh -vvv -F ~/.ssh/ai-camp/ssh-config team01
 **Проверить доступность центральной точки входа:**
 
 ```bash
-ping bastion.camp.aitalenthub.com
+ping bastion.camp.aitalenthub.ru
 ```
 
 ### Приложение не доступно извне
@@ -736,7 +736,7 @@ sudo ufw allow 443/tcp
 
 ```bash
 # Проверить что домен указывает на правильный IP
-dig team01.camp.aitalenthub.com
+dig team01.camp.aitalenthub.ru
 ```
 
 ### Ошибка "Permission denied" в Docker
