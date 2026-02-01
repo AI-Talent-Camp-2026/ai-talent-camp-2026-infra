@@ -123,7 +123,14 @@ sudo apt upgrade -y
 Docker - рекомендуемый способ развертывания приложений.
 
 ```bash
-# Установить Docker
+# Добавить gpg ключи для установки докера через apt
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Установить Docker и docker-compose
 sudo apt update
 sudo apt install -y docker.io docker-compose-plugin
 
@@ -173,7 +180,7 @@ sudo nano /etc/nginx/sites-available/myapp
 ```nginx
 server {
     listen 80;
-    server_name team01.camp.aitalenthub.ru;
+    server_name team01.camp.aitalenthub.ru; # тут надо поменять на ваш домен
 
     location / {
         proxy_pass http://localhost:3000;
@@ -213,7 +220,7 @@ Let's Encrypt предоставляет бесплатные SSL сертифи
 # Установить Certbot
 sudo apt install -y certbot python3-certbot-nginx
 
-# Получить сертификат
+# Получить сертификат. Не забудьте поменять домен на ваш
 sudo certbot --nginx -d team01.camp.aitalenthub.ru
 
 # Следуйте инструкциям:
